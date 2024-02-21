@@ -127,7 +127,6 @@ kable(head(half_lives_yeast), align = c('c', 'c'), "html")
 kable(head(half_lives_human), align = c('c', 'c'), "html")
 ```
 
-
 ```{r}
 #| label: UniProt
 #| echo: false
@@ -235,6 +234,5 @@ occurrences <- isolate %>%
   arrange(desc(count)) 
 kable(head(occurrences), align = c('c', 'c'))
 ```
-A2ASS6  TITIN_MOUSE 
-Key component in the assembly and functioning of vertebrate striated muscles.
 
+A2ASS6 TITIN_MOUSE Key component in the assembly and functioning of vertebrate striated muscles.

@@ -1,0 +1,183 @@
+---
+title: "MS3_human"
+format: 
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+params:
+  organism: human
+---
+
+```{r}
+#| label: setup
+#| echo: false
+
+knitr::opts_chunk$set(fig.align = 'center')
+# orange = #FF681E
+# purple = #5A2A82
+# green = #5DB7B1
+# grey = #7C7C7C
+# black = #1B2944
+```
+
+# Data retrieval
+
+## PTMs
+
+### Original data
+
+```{r}
+#| echo: false
+#| label: data_load
+#| message: false
+library(kableExtra)
+library(dplyr)
+library(tidyr)
+setwd("/Users/anastasialinchik/Desktop/Thesis/thesis")
+human_df <- read.csv(file = "allPTMs-Human.csv", header = T)
+kable(head(human_df))
+```
+
+Filter out the modifications that occur is fewer than 5 projects. Dimensions before filtering `r dim(human_df)`
+
+```{r}
+#| echo: false
+human_df <- human_df %>%
+  filter('X.Projects' > 5)
+```
+
+Dimensions after filtering `r dim(human_df)`
+
+This is a table of various types of modifications in the dataset:
+
+```{r}
+#| echo: false
+#| message: false
+
+library(ggplot2)
+kable(human_df %>% distinct(ptm_class))
+```
+
+The exact chemical modification:
+
+```{r}
+#| echo: false
+kable(head(human_df %>% distinct(ptm_name)))
+```
+
+The dimensions of the original database are `r dim(human_df)`
+
+### Selecting post-translational modifications
+
+First step is to filter by `Post-translational`
+
+```{r}
+#| echo: false
+#| label: PTMs
+#| warning: false
+human_ptms <- human_df %>% filter(ptm_class == "Post-translational")
+```
+
+After filtering out all of the other modifications the final dimensions of the dataframe are `r dim(human_ptms)`
+
+### Basic statistics (only for post-translational modifications)
+
+```{r}
+#| echo: false
+
+unique_proteins <-human_ptms %>% distinct(LeadProt)
+unique_ptms <-human_ptms %>% distinct(ptm_name)
+```
+
+-   There are `r dim(unique_proteins)[1]` unique proteins that were investigated.
+-   There are `r dim(unique_ptms)[1]` unique PTMs
+
+## Protein half-lives
+
+Protein half-lives were used as a measure of protein turnover rates. There is no overall database with all of the protein half-lives, therefore the data was found in different papers.
+
+**Human** protein life-times were downloaded from the following paper: [Systematic study of the dynamics and half-lives of newly synthesized proteins in human cells](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5975921/). The necessary data can be found in the Supplementary Material section, in the fourth file with the name `SC-007-C5SC03826J-s004.xlsx`.
+
+```{r}
+#| label: half-lives
+#| echo: false 
+#| warning: false #The warnings can be ignored because they are for other columns. 
+
+library(readxl)
+
+half_lives_human <- read_xlsx(path = 'human_half_lives.xlsx', skip = 1) %>% 
+  select('Uniprot ID','t1/2 (hour)')
+# some of the proteins have the same half lives and they are listed together
+names(half_lives_human) <- c("UniProtID", "half_life")
+
+kable(head(half_lives_human), align = c('c', 'c'), "html")
+```
+
+Matching protein half-lives and PTMs based on the UniProtID. The entries for which no half lives were found, will be removed. The dimensions before adding half-lives (filtered for `Post-translational`): `r dim(human_ptms)`
+
+```{r}
+#| label: join
+#| echo: false
+
+human_ptms_with_hl <- inner_join(human_ptms, half_lives_human, by = c("LeadProt" = "UniProtID")) 
+
+kable(head(human_ptms_with_hl))
+```
+
+The dimensions after adding half-lives: `r dim(human_ptms_with_hl)`.
+
+# Visualisations
+
+## Distribution of types of post-translational modifications
+
+```{r}
+#| echo: false
+human_ptms_with_hl_grouped_bm <- human_ptms_with_hl %>% 
+  group_by(ptm_name) %>%
+  summarise(total_counts = sum(total_psms), mean_half_life = mean(half_life))
+  
+ggplot(human_ptms_with_hl_grouped_bm, aes(x = ptm_name, y = total_counts)) +
+  geom_bar(stat = "identity", fill = "#5DB7B1", color = 'black') +
+  theme_linedraw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 5))
+```
+
+Total counts are the number of times that this modification was detected across all projects. This label is way too small therefore the dataframe was filtered to only include PTMs with a total count above 50,000.
+
+```{r}
+#| echo: false
+human_ptms_with_hl_grouped_bm_high <- human_ptms_with_hl_grouped_bm %>%
+  filter(total_counts>100000)
+
+ggplot(human_ptms_with_hl_grouped_bm_high, aes(x = ptm_name, y = total_counts)) +
+  geom_bar(stat = "identity", fill = "#5DB7B1", color = 'black') +
+  theme_linedraw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 12))
+```
+
+## Distribution of protein half-lives
+
+```{r}
+#| label: oxidation
+#| echo: false
+#| warning: false
+
+human_ptms_with_hl_oxi_grouped_bp <- human_ptms_with_hl %>% 
+  filter(ptm_name == '[35]Oxidation') %>%
+  group_by(LeadProt) %>%
+  summarise(total_counts = sum(total_psms), mean_half_life = mean(half_life))
+
+highlights <- ifelse(human_ptms_with_hl_oxi_grouped_bp$mean_half_life>115, '#F99417', 'black')
+human_ptms_with_hl_oxi_grouped_bp$highlights <- highlights
+
+ggplot(human_ptms_with_hl_oxi_grouped_bp, aes(x = mean_half_life, y = total_counts, color = highlights)) +
+  geom_bar(stat = "identity", fill = "#5DB7B1", color = highlights) +
+  labs(x = "Protein half-life (days)", y = "Number of occurrences") +
+  theme_linedraw()
+
+```

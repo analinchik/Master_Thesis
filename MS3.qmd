@@ -1,21 +1,63 @@
 ---
-title: "MS2"
+title: "MS3_human"
 format: 
   html:
     theme: flatly
     toc: true
-    toc-depth: 2
-    toc-expand: 2
+    toc-depth: 3
+    toc-expand: 3
     toc-title: Contents
     smooth-scroll: true
 editor: visual
 params:
-  organism: mouse
+  organism: human
 ---
-
 ```{r}
-setwd("~/Master of Bioinformatics/MasterThesis/Rfiles")
-human_df <- read.csv(file = "~/Downloads/20231120-allPTMs-Human.csv", header = T)
-human_ptms <- human_df %>% filter(ptm_class == "Post-translational") %>% filter(X.Projects>5) %>% arrange(desc(X.Projects))
+#| label: setup
+#| echo: false
 
+knitr::opts_chunk$set(fig.align = 'center')
+# orange = #FF681E
+# purple = #5A2A82
+# green = #5DB7B1
+# grey = #7C7C7C
+# black = #1B2944
 ```
+
+# Data retrieval
+
+## PTMs
+### Original data
+```{r}
+#| echo: false
+#| label: data_load
+
+library(kableExtra)
+setwd("/Users/anastasialinchik/Desktop/Thesis/thesis")
+human_df <- read.csv(file = "allPTMs-Human.csv", header = T)
+
+kable(head(human_df))
+```
+
+Filter out the modifications that occur is fewer than 5 projects. 
+Dimensions before filtering `r dim(human_df)`
+```{r}
+human_df <- human_df %>%
+  filter('X.Projects' > 5)
+```
+
+Dimensions after filtering `r dim(human_df)`
+
+
+This is a table of various types of modifications in the dataset:
+```{r}
+#| echo: false
+#| message: false
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+
+kable(human_df %>% distinct(ptm_class))
+```
+
