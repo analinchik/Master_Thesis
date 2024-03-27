@@ -1,0 +1,280 @@
+---
+title: "MS3_human"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+params:
+  organism: human
+---
+
+```{r setup, include=FALSE, cache = FALSE}
+require("knitr")
+knitr::opts_knit$set(fig.align = 'center')
+opts_knit$set(root.dir = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis')
+#getwd()
+```
+
+# Processing
+
+## Loading the original data
+
+```{r}
+#| include: false
+#| label: data_load
+#| message: false
+library(kableExtra) # isn't really used anymore
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readxl)
+```
+
+```{r}
+human_df <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/Human-separateProjects.csv", header = T)
+```
+
+## Selecting post-translational modifications
+
+-   Selecting only `Post-translational` modifications.
+-   Expanding the dataset so that each row is an individual modification i.e. removing the `total_counts` variable.
+
+```{r}
+#| echo: false
+#| label: PTMs
+#| warning: false
+human_ptms <- human_df %>% filter(ptm_class == "Post-translational")
+human_ptms$modification <- paste(human_ptms$ptm_name, human_ptms$ptm_res, sep = "_")
+human_ptms$unimod_id <- as.numeric(gsub("\\[|\\].*", "", human_ptms$ptm_name))
+
+# NORMALISATION
+num_raw_files_df <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/Num_files_per_PXD.csv', header = T)
+names(num_raw_files_df) <- c('project_id', 'raw_files_counts')
+
+ 
+#missing_raw_files_count <- human_ptms %>% select(project_id) %>% distinct() %>% filter(!project_id %in% num_raw_files_df$project_id)
+
+human_ptms <- inner_join(human_ptms, num_raw_files_df, by = join_by(project_id == project_id))
+human_ptms <- human_ptms %>% mutate(norm_counts = total_counts/raw_files_counts)
+
+write.table(human_ptms, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv', row.names = F, sep="\t", quote = F)
+
+
+# expanding the counts column
+human_ptms_expanded <- human_ptms[rep(1:nrow(human_ptms), human_ptms$total_counts), ]
+#human_ptms_expanded <- human_ptms_expanded %>% dplyr::select(-total_counts)
+human_ptms_expanded$total_counts <- 1
+
+# NORMALISE AGAIN FOR THE EXPANDED VERSION
+human_ptms_expanded <- human_ptms_expanded %>% mutate(norm_counts = total_counts/raw_files_counts)
+
+#WRITING TO FILE
+
+write.table(human_ptms_expanded, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded.tsv', row.names = F, sep="\t", quote = F)
+```
+
+After filtering out all of the other modifications the final dimensions of the data frame are `r dim(human_ptms)`.
+
+# Protein half-lives
+
+Protein half-lives were used as a measure of protein turnover rates. There is no overall database with all of the protein half-lives, therefore the data was found in different papers.
+
+**Human** protein life-times were downloaded from the following paper: https://www.science.org/doi/10.1126/science.1199784#appendix
+
+-   The half-lives were given for each gene name, therefore LeapProt IDs were mapped to gene names using data from UniProt. IDs that could not be mapped directly, were mapped manually.
+
+**Human** protein life-times were downloaded from the following paper: [Systematic study of the dynamics and half-lives of newly synthesized proteins in human cells](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5975921/). The necessary data can be found in the Supplementary Material section (Supplementary table 3 - Table S3), in the fourth file with the name `SC-007-C5SC03826J-s004.xlsx`.
+
+```{r}
+#| label: half-lives
+#| echo: false 
+#| warning: false #The warnings can be ignored because they are for other columns. 
+
+# the half-life is in hours
+hl_dynamics<- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/proteome_hl_dynamics.txt", header = T, sep = " ", skip = 1)
+
+idmapping <- idmapping_manual <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/idmapping_proteome_hl_dynamics.tsv", header = T, sep = "\t")
+idmapping_manual <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/idmapping_manual.txt", header = T, sep = "\t")
+idmapping <- rbind(idmapping, idmapping_manual)
+
+hl_dynamics_merged <- inner_join(idmapping, hl_dynamics, by = join_by(From == Gene_symbol))
+hl_dynamics_merged <- hl_dynamics_merged %>% dplyr::select(UniProtID = Entry, half_life_hours)
+
+### The second set of half-lives 
+hl_new_synth <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/newly_synthesised_protein_hl.xlsx', skip = 1) %>% 
+  dplyr::select('Uniprot ID','t1/2 (hour)')
+# some of the proteins have the same half lives and they are listed together
+names(hl_new_synth) <- c("UniProtID", "half_life_hours")
+
+hl <- rbind(hl_new_synth, hl_dynamics_merged)
+hl <- hl %>% group_by(UniProtID) %>% 
+  summarise(mean_hl_hours = mean(half_life_hours)) %>% rename(LeadProt = UniProtID)
+
+write.table(hl, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/hl.tsv', row.names = F, sep="\t", quote = F)
+```
+
+Matching protein half-lives and PTMs based on the UniProtID. The entries for which no half lives were found, will be removed. The dimensions before adding half-lives (filtered for `Post-translational`): `r dim(human_ptms)`
+
+The dimensions after adding half-lives: `r dim(human_ptms_with_hl)`.
+
+```{r}
+hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/hl.tsv', header = T, sep = '\t')
+```
+
+```{r}
+human_ptms_expanded_hl <- inner_join(human_ptms_expanded, hl, by= join_by(LeadProt == UniProtID))
+
+write.table(human_ptms_expanded_hl, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl.tsv', row.names = F, sep="\t", quote = F)
+```
+
+```{r}
+human_ptms_hl <- inner_join(human_ptms, hl, by = join_by(LeadProt == LeadProt))
+
+write.table(human_ptms_hl, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_hl.tsv', row.names = F, sep="\t", quote = F)
+```
+
+# Adding protein lengths
+
+```{r}
+lengths <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_lengths_human.tsv", sep = '\t')
+lengths <- lengths %>% dplyr::select(UniProt = From,  Length)
+
+# there are some duplications for the lengths
+lengths <- lengths %>% 
+  group_by(UniProt) %>%
+  summarise(Length = mean(Length))
+
+human_ptms_expanded_length <- inner_join(human_ptms_expanded, lengths, by = join_by(LeadProt == UniProt))
+
+write.table(human_ptms_expanded_length, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_length.tsv', row.names = F, sep="\t", quote = F)
+
+write.table(lengths, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/lengths.tsv', row.names = F, sep="\t", quote = F)
+```
+
+# Complete dataset with half-lives and lengths
+
+```{r}
+human_ptms_expanded_hl_lengths <- inner_join(human_ptms_expanded_hl, lengths, by = join_by(LeadProt == UniProt))
+
+write.table(human_ptms_expanded_hl_lengths, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl_lengths.tsv', row.names = F, sep="\t", quote = F)
+```
+
+# Half-lives of long-lived proteins
+
+the list of long lived proteins: [Identification of long-lived proteins reveals exceptional stability of essential cellular structures - PMC (nih.gov)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3788602/)
+
+The long lived proteins were identified in rats. The human orthologs were found.
+
+The half lives of many long-lived proteins were found here: [Systematic analysis of protein turnover in primary cells \| Nature Communications](https://www.nature.com/articles/s41467-018-03106-1#Sec25)
+
+and here:
+
+```{r}
+long_lived_proteins <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/long_lived_proteins.xlsx' )
+long_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/long_lived_proteins_hl.xlsx', sheet = 'protein half lives high qual')
+
+
+# Bcells
+
+Bcells1 <- subset(long_lived_proteins_hl, select = c(1,2,3))
+Bcells2 <- subset(long_lived_proteins_hl, select = c(1,5,6))
+Bcells1 <- na.omit(Bcells1)
+Bcells2 <- na.omit(Bcells2)
+names(Bcells1) <- c('gene_name', 'half_life', 'quality')
+names(Bcells2) <- c('gene_name', 'half_life', 'quality')
+Bcells <- rbind(Bcells1, Bcells2)
+quality <- if_else(Bcells$quality == 'good', 1, 0)
+Bcells$quality <- quality
+# only include B cells with good quality
+Bcells <- Bcells %>% filter(quality == 1)
+Bcells$cell_type <- 'Bcells' 
+
+Bcells <- Bcells %>% group_by(gene_name) %>%
+  summarise(mean_hl = mean(half_life)) 
+Bcells$cell_type <- 'Bcells' 
+
+# NKcells
+
+NKcells1 <- subset(long_lived_proteins_hl, select = c(1,8,9))
+NKcells2 <- subset(long_lived_proteins_hl, select = c(1,11,12))
+NKcells1 <- na.omit(NKcells1)
+NKcells2 <- na.omit(NKcells2)
+names(NKcells1) <- c('gene_name', 'half_life', 'quality')
+names(NKcells2) <- c('gene_name', 'half_life', 'quality')
+NKcells <- rbind(NKcells1, NKcells2)
+quality <- if_else(NKcells$quality == 'good', 1, 0)
+NKcells$quality <- quality
+# only include cells with good quality
+NKcells <- NKcells %>% filter(quality == 1)
+
+
+NKcells <- NKcells %>% group_by(gene_name) %>%
+  summarise(mean_hl = mean(half_life)) 
+
+NKcells$cell_type <- 'NKcells' 
+
+# monocytes
+
+monocytes1 <- subset(long_lived_proteins_hl, select = c(1,20,21))
+monocytes2 <- subset(long_lived_proteins_hl, select = c(1,23,24))
+monocytes1 <- na.omit(monocytes1)
+monocytes2 <- na.omit(monocytes2)
+names(monocytes1) <- c('gene_name', 'half_life', 'quality')
+names(monocytes2) <- c('gene_name', 'half_life', 'quality')
+monocytes <- rbind(monocytes1, monocytes2)
+quality <- if_else(monocytes$quality == 'good', 1, 0)
+monocytes$quality <- quality
+# only include cells with good quality
+monocytes <- monocytes %>% filter(quality == 1)
+
+
+monocytes <- monocytes %>% group_by(gene_name) %>%
+  summarise(mean_hl = mean(half_life)) 
+
+monocytes$cell_type <- 'monocytes' 
+
+
+# hepatocytes
+
+hepatocytes1 <- subset(long_lived_proteins_hl, select = c(1,14,15))
+hepatocytes2 <- subset(long_lived_proteins_hl, select = c(1,17,18))
+hepatocytes1 <- na.omit(hepatocytes1)
+hepatocytes2 <- na.omit(hepatocytes2)
+names(hepatocytes1) <- c('gene_name', 'half_life', 'quality')
+names(hepatocytes2) <- c('gene_name', 'half_life', 'quality')
+hepatocytes <- rbind(hepatocytes1, hepatocytes2)
+quality <- if_else(hepatocytes$quality == 'good', 1, 0)
+hepatocytes$quality <- quality
+# only include cells with good quality
+hepatocytes <- hepatocytes %>% filter(quality == 1)
+
+
+hepatocytes <- hepatocytes %>% group_by(gene_name) %>%
+  summarise(mean_hl = mean(half_life)) 
+
+hepatocytes$cell_type <- 'hepatocytes' 
+
+cell_types_hl <- rbind(Bcells, NKcells, hepatocytes, hepatocytes)
+cell_types_hl <- cell_types_hl %>% group_by(gene_name) %>%
+  summarise(mean_hl = mean(mean_hl))
+
+# Now just need to map the cell name to UniProt ID
+
+#write.table(cell_types_hl$gene_name, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/cell_types_hl_ids.tsv', row.names = F, sep="\t", quote = F)
+
+cell_types_hl_uniprot <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/cell_types_hl_ids_uniprot.tsv', header = T, sep = '\t')
+
+cell_types_hl <- inner_join(cell_types_hl, cell_types_hl_uniprot, by = join_by(gene_name == From)) %>% dplyr::select(Entry, mean_hl) %>%
+  dplyr::rename(LeadProt = Entry, mean_hl_hours = mean_hl) %>%
+  group_by(LeadProt) %>%
+  summarise(mean_hl_hours = mean(mean_hl_hours))
+
+write.table(cell_types_hl, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_cell_types.tsv', row.names = F, sep="\t", quote = F)
+
+```

@@ -1,0 +1,337 @@
+---
+title: "Descriptive statistics"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+params:
+  organism: human
+---
+
+# Loading packages
+
+```{r}
+#| echo: false
+#| include: false
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(kableExtra)
+```
+
+# Loading dataframes
+
+```{r}
+#| echo: false
+human_df <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/Human-separateProjects.csv", header = T)
+
+human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
+```
+
+# Initial exploration of the dataset
+
+-   The raw data was analysed with ionbot v0.6.2. Precursor mass tolerance and fragment mass tolerance was 20ppm. Cys Carbamidomethylation was set as a fixed PTM and Met Oxidation was set as expected (variable) PTM. Furthermore, unexpected PTMs were searched for from among all modifications in UniMod. The enzyme was set to trypsin K\|R.
+
+-   No discriminating principle was used when selecting the projects to re-process.
+
+-   For each project, the detected modifications are listed, along with the class of the modification, the UNIMOD identifier, the number of PSMs for particular protein, the position of the amino acid, the amino acid where the modification was found.
+
+    -   all of the modifications are labelled using [UNIMOD](https://www.unimod.org/modifications_list.php?goto=6) identifiers. Furthermore, the UniProt identifier of the protein on which the modification was found is listed, the amino acid on which the modification was found and the position of the amino acid. Finally, the total counts of the PSM spectra matches are also listed.
+
+## PTM level
+
+The dataset contains the following identified classes: Artefact, Chemical derivative, Post-translational, Multiple, Pre-translational, O-linked glycosylation, Other Glycosylations, N-linked glycosylation, Glyco, Co-translational and synthetic peptide group.
+
+```{r}
+#| echo: false
+#| warning: false
+human_df %>% group_by(ptm_class) %>% 
+  summarise(total_counts = sum(total_counts)) %>%
+  ggplot(aes(x = reorder(ptm_class, total_counts), y = total_counts)) +
+  geom_histogram(stat = 'identity', fill = '#73BFB8') +
+  labs(y = 'Counts of PSMs', x = 'Modification classes', title = 'Abundances of modification classes')+
+  coord_flip() +
+  theme_classic()
+```
+
+Given that the focus of this study is on post-translational modifications (PTMs), the rest were excluded.
+
+-   In total, 115 different UNIMOD identifiers are present in this subset.
+
+The top most abundant PTMs are listed below:
+
+```{r}
+#| echo: false
+#| include: false
+
+#how many ptms are there?
+dim(human_df %>% 
+      filter(ptm_class == 'Post-translational') %>% 
+      distinct(ptm_name))
+```
+
+```{r}
+#| echo: false
+
+human_ptms_grouped_ptm <- human_ptms %>% 
+  group_by(ptm_name) %>%
+  summarise(total_counts = sum(total_counts)) %>%
+  arrange(desc(total_counts))
+
+human_ptms_grouped_ptm_large <- human_ptms_grouped_ptm %>%
+  filter(total_counts > 300000) 
+
+ggplot(human_ptms_grouped_ptm_large, aes(x = reorder(ptm_name, total_counts), y = total_counts)) +
+  geom_bar(stat = "identity", fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'UNIMOD identifier')+
+  theme_classic(base_size = 16) 
+```
+
+When defining a PTM using its UNIMOD identifier and the residue that it modified, the number of unique PTMs further increases to 205.
+
+```{r}
+#| echo: false
+#| include: false
+# how many unique modifications when modification = ptm_name + ptm_res 
+human_ptms$modification <- paste(human_ptms$ptm_name, human_ptms$ptm_res, sep = "_")
+
+df <- human_ptms %>% dplyr::select(modification) %>%
+  distinct() 
+```
+
+## Amino acid level
+
+When looking at the dataset on the amino acid level, all of the amino acids have some type of modifications apart from leucine (L).
+
+```{r}
+#| echo: false
+#| include: false
+# which amino acids were modified. L is missing
+df <- human_ptms %>% dplyr::select(ptm_res) %>%
+  distinct() 
+```
+
+It is also interesting to look at whether some amino acids get modified more than others. Serine is by far the most modified amino acid.
+
+-   I am struggling to find literature where they look at the susceptibility of amino acids to PTMs.
+
+```{r}
+#| echo: false
+
+# number of modifications per residue
+sum_AA_mod <- human_ptms %>% group_by(ptm_res) %>%
+  summarise(total_counts = sum(total_counts))
+
+ggplot(sum_AA_mod, aes(x = reorder(ptm_res, -total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  labs(x = 'Residue' , y = 'PSM counts', title = 'Total abundance of PSMs per residue') +
+  theme_classic()
+```
+
+However, when looking at the number of different PTMs per residue, we can see that lysine and cysteine are susceptible to a larger variety of PTMs compared to serine.
+
+```{r}
+#| echo: false
+
+# number of different PTMs per residue
+diff_PTMs_AA <- human_ptms %>%
+  dplyr::select(ptm_res, ptm_name) %>%
+  distinct() %>%
+  group_by(ptm_res) %>%
+  summarise(diff_PTMs = n())
+
+ggplot(diff_PTMs_AA, aes(x = reorder(ptm_res, -diff_PTMs), y = diff_PTMs)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  labs(x = 'Residue' , y = 'Number of different PTMs', title = 'Number of different PTMs per residue') +
+  theme_classic()
+```
+
+Create a table with all of the modifications per amino acid:
+
+```{r}
+#| echo: false
+human_ptms_grouped <- human_ptms %>%
+  group_by(ptm_res) %>%
+  summarize(PTMs = paste(unique(ptm_name), collapse = "; "))
+
+kable(human_ptms_grouped, caption = "Summary of PTMs by Residue")
+
+```
+
+```{r}
+#| echo: false
+#| eval: false
+table <- kable(human_ptms_grouped, 
+      caption = "Summary of PTMs by PTM Residue",
+      align = "l",              # Align all columns to the left
+      col.names = c("PTM Residue", "Post-translational modification"),  # Specify column names
+      format = "html",          # Format the table as HTML
+      escape = FALSE,           # Allow HTML formatting
+      table.attr = "style='width:50%; margin-left:auto; margin-right:auto;'", # Center the table and set width
+      row.names = FALSE,        # Do not display row names
+      bold.headers = TRUE      # Make headers bold
+)
+
+save_kable(table, file = "human_ptms_table.html")
+
+table_png <- as_image(table)
+
+# Save the image as PNG
+png_file <- "human_ptms_table.png"
+ggsave(png_file, table_png)
+
+human_ptms_grouped %>%
+  kbl(caption = "Recreating booktabs style table") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+kable(human_ptms_grouped, "latex") %>%
+  kable_styling(latex_options = "striped") %>%
+  save_kable("inst/test.png")
+
+human_ptms_grouped %>%
+  kbl() %>%
+  kable_styling() %>%
+  save_kable("test.png")
+
+human_ptms_grouped %>%
+  kbl() %>%
+  kable_paper("hover", full_width = F) %>%
+  save_kable("test.png")
+
+kable(human_ptms_grouped, booktabs = T) %>%
+  kable_styling(latex_options = c("striped", "scale_down")) %>%
+  as_image(width = 8)
+```
+
+## Protein level
+
+In total there are 18929 unique proteins in the dataset.
+
+```{r}
+#| echo: false
+#| include: false
+human_ptms %>% distinct(LeadProt) %>% dim()
+```
+
+When looking at the most commonly modified proteins, we can see that the top 10 most modified proteins include albumin (ALBU_HUMAN), collagen (CO1A1_HUMAN, CO1A2_HUMAN, CO3A1_HUMAN), actin (ACTB_HUMAN) etc.
+
+```{r}
+#| echo: false
+per_protein_ptms <- human_ptms %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(total_counts = sum(total_counts)) %>% arrange(desc(total_counts))
+
+ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
+  theme_classic(base_size = 16) 
+```
+
+Using the normalised counts. The normalisation is done using the number of raw files in a project.
+
+```{r}
+per_protein_ptms <- human_ptms %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(total_counts = sum(norm_counts)) %>% arrange(desc(total_counts))
+
+ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
+  theme_classic(base_size = 16) 
+```
+
+Now also normalised using the lengths of each protein.
+
+```{r}
+lengths <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/lengths.tsv', header = T, sep = '\t')
+
+human_ptms_lengths <- inner_join(human_ptms, lengths, by = join_by(LeadProt == UniProt))
+human_ptms_lengths <- human_ptms_lengths %>% mutate(norm_lengths = norm_counts/Length)
+
+per_protein_ptms <- human_ptms_lengths %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(total_counts = sum(norm_lengths)) %>% arrange(desc(total_counts))
+pdf("my_plot.pdf")
+ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
+  theme_classic(base_size = 16) 
+```
+
+Now normalise by the raw files and also the abundances
+
+```{r}
+#| echo: false
+
+protein_abundances <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_abundances.tsv", sep = '\t', skip = 11, header = T)
+paxdb_mapping <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/paxdb_mapping.tsv", sep = '\t', skip = 11, col.names = c('paxdb_id', 'UniProt')) %>% filter(grepl("_HUMAN$", UniProt))
+protein_abundances <- inner_join(protein_abundances, paxdb_mapping, by = join_by(string_external_id == paxdb_id)) %>% dplyr::select(-c("string_external_id", "raw_spectral_count"))
+human_ptms_hl_abundances <- inner_join(human_ptms_hl, protein_abundances, by = join_by(Uniprot_entry_name == UniProt))
+
+```
+
+```{r}
+
+human_ptms_hl_abundances <- human_ptms_hl_abundances %>% mutate(norm_lengths = norm_counts/abundance)
+per_protein_ptms <- human_ptms_hl_abundances %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(total_counts = sum(norm_lengths)) %>% arrange(desc(total_counts))
+
+ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
+  theme_classic(base_size = 16) 
+```
+
+## Project level
+
+There are 498 projects in this dataset. These projects vary in sizes, number of raw files, number of samples, number of patients, patient conditions etc.
+
+```{r}
+#| echo: false
+#| include: false
+human_ptms %>% distinct(project_id) %>% dim()
+```
+
+```{r}
+#| echo: false
+ptms_per_project <- human_ptms %>% 
+  group_by(project_id) %>%
+  summarise(total_counts = sum(total_counts)) %>% arrange(desc(total_counts))
+
+ggplot(ptms_per_project[1:10,], aes(x = reorder(project_id, total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'Project ID', title = 'Top 10 projects with the most PTMs')+
+  theme_classic(base_size = 16) 
+```
+
+The boxplot below shows the distribution of the total number of PSMs in each project. The outliers have been excluded.
+
+```{r}
+#| echo: false
+
+ptms_per_project %>% ggplot(aes(y = total_counts)) +
+  geom_boxplot(outliers = F, fill = '#73BFB8') +
+  labs(y = 'PSM counts', title = 'Distribution of the number of PSMs in each project') +
+  theme_classic()
+  
+
+#print('Outliers')
+#outliers <- boxplot.stats(ptms_per_project$total_counts)$out
+#print(outliers) # these the the PTM counts that were excluded
+
+```

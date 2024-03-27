@@ -2,6 +2,7 @@
 title: "MS3_human"
 format: 
   html:
+    embed-resources: true
     theme: flatly
     toc: true
     toc-depth: 3
@@ -16,82 +17,80 @@ params:
 ```{r setup, include=FALSE, cache = FALSE}
 require("knitr")
 knitr::opts_knit$set(fig.align = 'center')
-## setting working directory
 opts_knit$set(root.dir = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis')
-```
-
-```{r}
-#| eval: false
-
-getwd()
-#write.table(file, file = 'LeadProt_names.tsv', row.names=FALSE, sep="\t", quote = F)
-# orange = #FF681E
-# purple = #5A2A82
-# green = #5DB7B1
-# grey = #7C7C7C
-# black = #1B2944
+#getwd()
 ```
 
 # Data retrieval
 
-## PTMs
-
-### Original data
-
 ```{r}
-#| echo: false
+#| include: false
 #| label: data_load
 #| message: false
-library(kableExtra)
+library(kableExtra) # isn't really used anymore
 library(dplyr)
 library(tidyr)
+library(ggplot2)
+library(readxl)
 
 human_df <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/Human-separateProjects.csv", header = T)
-kable(head(human_df))
 ```
 
 This is a table of various types of modifications in the dataset:
 
 ```{r}
-#| echo: false
-#| message: false
+# dimensions of the dataset
+dim(human_df)
 
-library(ggplot2)
+# PTM classes
 
-kable(human_df %>% distinct(ptm_class))
-dim(human_df %>% distinct(ptm_class))
+# types of PTMs
+dim(human_df %>% distinct(ptm_name))
+# UNIMOD modifications 
+# most modified residues
 ```
-
-The different chemical modifications:
 
 ```{r}
-#| echo: false
-kable(head(human_df %>% distinct(ptm_name)))
-dim(human_df %>% distinct(ptm_name))
+human_df %>% group_by(ptm_class) %>% 
+  summarise(total_counts = sum(total_counts)) %>%
+  ggplot(aes(x = reorder(ptm_class, total_counts), y = total_counts)) +
+  geom_histogram(stat = 'identity') +
+  coord_flip() +
+  theme_linedraw()
 ```
 
-The dimensions of the original database are `r dim(human_df)`
+-   The dataset is the result of reprocessing publicly available data from PRIDE, where LC MS/MS data is submitted.
 
-### Selecting post-translational modifications
+-   The reprocessing is done using ionbot.
 
-First step is to filter by `Post-translational`
+-   The algorithm is able to identify `r dim(human_df %>% distinct(ptm_class))` different modification classes.
+
+-   For each project, the number of modifications is listed and the total number of times that each unique modification occurs in the project. The most common classes of modifications are 'Artefact', 'Chemical derivative' and 'Post-translational'.
+
+## Selecting post-translational modifications
+
+-   First step is to filter by `Post-translational`.
 
 ```{r}
 #| echo: false
 #| label: PTMs
 #| warning: false
 human_ptms <- human_df %>% filter(ptm_class == "Post-translational")
+human_ptms_expanded <- human_ptms[rep(1:nrow(human_ptms), human_ptms$total_counts), ]
+human_ptms_expanded <- human_ptms_expanded %>% select(-total_counts)
 ```
 
 After filtering out all of the other modifications the final dimensions of the data frame are `r dim(human_ptms)`.
 
-### Basic statistics (only for post-translational modifications)
+## Basic statistics (only for post-translational modifications)
 
 ```{r}
 #| echo: false
 
 unique_proteins <- human_ptms %>% distinct(LeadProt)
+unique_proteins
 unique_ptms <- human_ptms %>% distinct(ptm_name)
+unique_ptms
 ```
 
 -   There are `r dim(unique_proteins)[1]` unique proteins that were investigated.
@@ -101,7 +100,9 @@ unique_ptms <- human_ptms %>% distinct(ptm_name)
 
 Protein half-lives were used as a measure of protein turnover rates. There is no overall database with all of the protein half-lives, therefore the data was found in different papers.
 
-**Human** protein life-times were downloaded from the following paper: https://www.science.org/doi/10.1126/science.1199784#appendix 
+**Human** protein life-times were downloaded from the following paper: https://www.science.org/doi/10.1126/science.1199784#appendix
+
+-   The half-lives were given for each gene name, therefore LeapProt IDs were mapped to gene names using data from UniProt. IDs that could not be mapped directly, were mapped manually.
 
 **Human** protein life-times were downloaded from the following paper: [Systematic study of the dynamics and half-lives of newly synthesized proteins in human cells](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5975921/). The necessary data can be found in the Supplementary Material section (Supplementary table 3 - Table S3), in the fourth file with the name `SC-007-C5SC03826J-s004.xlsx`.
 
@@ -109,10 +110,6 @@ Protein half-lives were used as a measure of protein turnover rates. There is no
 #| label: half-lives
 #| echo: false 
 #| warning: false #The warnings can be ignored because they are for other columns. 
-
-library(readxl)
-
-#human_ptms$UniProtID <- gsub("_HUMAN", "", human_ptms$Uniprot_entry_name)
 
 # the half-life is in hours
 hl_dynamics<- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/proteome_hl_dynamics.txt", header = T, sep = " ", skip = 1)
@@ -133,17 +130,44 @@ names(hl_new_synth) <- c("UniProtID", "half_life_hours")
 hl <- rbind(hl_new_synth, hl_dynamics_merged)
 hl <- hl %>% group_by(UniProtID) %>% 
   summarise(mean_hl_hours = mean(half_life_hours))
-
-kable(head(hl), align = c('c', 'c'), "html")
-
-human_ptms_with_hl <- inner_join(human_ptms, hl, by = c("LeadProt" = "UniProtID")) 
-
-kable(head(human_ptms_with_hl))
 ```
 
 Matching protein half-lives and PTMs based on the UniProtID. The entries for which no half lives were found, will be removed. The dimensions before adding half-lives (filtered for `Post-translational`): `r dim(human_ptms)`
 
 The dimensions after adding half-lives: `r dim(human_ptms_with_hl)`.
+
+-   Expanding the dataset so that each row is an individual modification i.e. removing the `total_counts` variable.
+
+```{r}
+human_ptms_expanded_hl <- inner_join(human_ptms_expanded, hl, by= join_by(LeadProt == UniProtID))
+
+write.table(human_ptms_expanded_hl, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/human_ptms_expanded_hl.tsv', row.names = F, sep="\t", quote = F)
+
+```
+
+## Length
+
+```{r}
+lengths <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_lengths_human.tsv", sep = '\t')
+lengths <- lengths %>% select(UniProt = From,  Length)
+
+# there are some duplications for the lengths
+lengths <- lengths %>% 
+  group_by(UniProt) %>%
+  summarise(Length = mean(Length))
+
+human_ptms_expanded_length <- inner_join(human_ptms_expanded, lengths, by = join_by(LeadProt == UniProt))
+
+write.table(human_ptms_expanded_length, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/human_ptms_expanded_length.tsv', row.names = F, sep="\t", quote = F)
+```
+
+## Complete dataset
+
+```{r}
+human_ptms_expanded_hl_lengths <- inner_join(human_ptms_expanded_hl, lengths, by = join_by(LeadProt == UniProt))
+
+write.table(human_ptms_expanded_hl_lengths, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/human_ptms_expanded_hl_lengths.tsv', row.names = F, sep="\t", quote = F)
+```
 
 # Visualisations
 
@@ -170,7 +194,6 @@ ggplot(human_ptms_with_hl_grouped_bm_large, aes(x = reorder(ptm_name, total_coun
   coord_flip()+
   labs(y ='Number of total counts in the dataset', x = 'UNIMOD identifier', title = "PTM abundancies")+
   theme_linedraw()
-  
 ```
 
 Total counts are the number of times that this modification was detected across all projects. This label is way too small therefore the dataframe was filtered to only include PTMs with a total count above 50,000.
@@ -190,10 +213,7 @@ ggplot(human_ptms_with_hl_grouped_bm_5, aes(x = reorder(ptm_name, total_counts),
 ## Distribution of protein half-lives
 
 ```{r}
-human_ptms_expanded <- human_ptms[rep(1:nrow(human_ptms), human_ptms$total_counts), ]
-human_ptms_expanded <- human_ptms_expanded %>% select(-total_counts)
 
-human_ptms_expanded_hl <- inner_join(human_ptms_expanded, hl, by= join_by(LeadProt == UniProtID))
 
 ggplot(human_ptms_expanded_hl, aes(x = mean_hl_hours)) +
   geom_histogram(bins = 50) + 
@@ -201,28 +221,71 @@ ggplot(human_ptms_expanded_hl, aes(x = mean_hl_hours)) +
   theme_linedraw()
 ```
 
-## Protein lengths
+```{r}
+human_ptms_expanded_hl_top5 <- human_ptms_expanded_hl %>% filter(ptm_name %in% c('[35]Oxidation', '[34]Methyl', '[40]Sulfo', '[21]Phospho', '[7]Deamidated'))
+
+ggplot(human_ptms_expanded_hl_top5, aes(x = ptm_name, y = mean_hl_hours)) +
+  geom_violin(bw=0.5, fill = '#F9AE8B') +
+  geom_boxplot(width=0.3) + 
+  labs(title = 'Violin plots for top 5 modifications', x = 'PTM name', y = 'Half-life (hours)') +
+  stat_summary(fun.y=mean, geom="point", shape=19, size=1.5, colour = '#EA7317') +
+  theme_linedraw()
+```
+
+### Testing statistical significance
+
+-   We want to investigate the effect of the type of PTM on the half-life of the proteins.
+
+#### Assumptions
 
 ```{r}
-lengths <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_lengths_human.tsv", sep = '\t')
-lengths <- lengths %>% select(UniProt = From,  Length)
+library(ggpubr)
+library(rstatix)
+# normality assumption
 
-# there are some duplications for the lengths
-lengths <- lengths %>% 
-  group_by(UniProt) %>%
-  summarise(Length = mean(Length))
+# Build the linear model
+model  <- lm(mean_hl_hours ~ ptm_name, data = human_ptms_expanded_hl_top5)
+# Create a QQ plot of residuals
+#ggqqplot(residuals(model))
+ggqqplot(human_ptms_expanded_hl_top5, "mean_hl_hours", facet.by = "ptm_name")
 ```
 
 ```{r}
+human_ptms_expanded_hl_top5 %>% levene_test(mean_hl_hours ~ ptm_name)
+plot(model, 1)
+```
+
+#### Test
+
+```{r}
+table_aov <- aov(human_ptms_expanded_hl_top5$mean_hl_hours ~ human_ptms_expanded_hl_top5$ptm_name, data = human_ptms_expanded_hl_top5)
+summary(table_aov)
+
+values <- TukeyHSD(table_aov)
+```
+
+### Krustal test
+
+```{r}
+library(rstatix)
+res.kruskal <- human_ptms_expanded_hl_top5 %>% kruskal_test(mean_hl_hours ~ ptm_name)
+res.kruskal
+
+pwc2 <- human_ptms_expanded_hl_top5 %>% 
+  wilcox_test(mean_hl_hours ~ ptm_name, p.adjust.method = "bonferroni")
+pwc2
+```
+
+## Protein lengths
 
 
-human_ptms_expanded_length <- inner_join(human_ptms_expanded, lengths, by = join_by(LeadProt == UniProt))
-
+```{r}
 ggplot(human_ptms_expanded_length, aes(x = Length)) +
   geom_histogram() +
   labs(title = 'Distribution of protein lengths', x = 'Length (in amino acids)', y = 'Counts') +
   theme_linedraw()
 ```
+
 ```{r}
 ggplot(human_ptms_expanded_length, aes(x = Length)) +
   geom_histogram() +
@@ -243,12 +306,31 @@ ggplot(human_ptms_lengths, aes(x = Length, y = PTMs_per_protein)) +
   labs(title = 'Number of PTMs in function of protein length', x = 'Protein length (amino acids)', y = 'Number of PTMs') +
   theme_linedraw()
 ```
+
 ```{r}
 human_ptms_lengths_zoom <- human_ptms_lengths %>% filter(Length < 10000)
 ggplot(human_ptms_lengths_zoom, aes(x = Length, y = PTMs_per_protein)) +
   geom_point() +
   labs(title = 'Number of PTMs in function of protein length', x = 'Protein length (amino acids)', y = 'Number of PTMs') +
   theme_linedraw()
+```
+
+### Testing statistical significance
+
+Larger proteins should be modified more than shorter proteins.
+
+```{r}
+library(stats)
+
+human_ptms_expanded_length %>% 
+  group_by(LeadProt) %>% 
+  mutate(counts = n()) %>%
+  select(LeadProt, counts, Length) %>% distinct()
+
+human_ptms_expanded_length_aov <- human_ptms_expanded_length %>% mutate(length_group = ifelse(Length < 2500, 'short', 'long'))
+
+table_aov <- aov(human_ptms_expanded_length_aov$Length ~ human_ptms_expanded_length_aov$length_group, data = human_ptms_expanded_length_aov)
+summary(table_aov)
 ```
 
 ## Phosphorylation
@@ -260,6 +342,7 @@ ggplot(human_ptms_expanded_hl_phospho, aes(x = mean_hl_hours)) +
   labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
   theme_linedraw()
 ```
+
 ## Oxidation
 
 ```{r}
@@ -269,15 +352,12 @@ ggplot(human_ptms_expanded_hl_oxi, aes(x = mean_hl_hours)) +
   labs(title = 'Distribution of half-lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
   theme_linedraw()
 ```
+
 ## Most modified PTMs
+
 ```{r}
 ggplot(human_ptms_expanded, aes(x = ptm_res)) +
   geom_histogram(stat = 'count') +
   labs(title = 'PTM counts for each residue', x = 'Residue', y = 'Counts') +
   theme_linedraw()
 ```
-
-
-
-
-

@@ -1,0 +1,433 @@
+---
+title: "Ageing_proteins"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| include: false
+#| warning: false
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(kableExtra)
+library(ggpubr)
+library(plotly)
+library(car)  # for ANOVA
+library(multcomp)  # for post-hoc tests
+library(rcompanion)  # for wtd.boxplot.stats
+#BiocManager::install("idpr")
+#library(idpr)
+```
+
+```{r}
+#| echo: false
+#| include: false
+human_df <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/Human-separateProjects.csv", header = T)
+
+# This is just a filtered by Post-translational
+human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
+human_ptms_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_hl.tsv", header = T, sep = '\t')
+
+
+human_ptms_expanded <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded.tsv", header = T, sep = '\t')
+human_ptms_expanded_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl.tsv", header = T, sep = '\t')
+human_ptms_expanded_length <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_length.tsv", header = T, sep = '\t')
+human_ptms_expanded_hl_lengths <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl_lengths.tsv", header = T, sep = '\t')
+
+hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/hl.tsv', header = T, sep = '\t')
+cell_types_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_cell_types.tsv', header = T, sep = '\t')
+long_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_cell_types.tsv', header = T, sep = '\t')
+ageing_proteins <- read_excel( '/Users/anastasialinchik/Desktop/Thesis/DATA/Age-correlated protein.xlsx')
+oxPTMs <- read.table(file = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis/oxPTMs_unimod.txt', header = T)
+```
+
+## PTMs and ageing proteins
+
+-   [This study](AgeAnnoMO:%20a%20knowledgebase%20of%20multi-omics%20annotation%20for%20animal%20aging) found a list of proteins that are associated with ageing. The mean number of modifications of these proteins will be compared to the mean number of modification of the proteins that are left in the dataset after excluding the ones associated with ageing.
+
+-   Oxidative stress is a common phenomenon that occurs during the ageing process. This leads to oxidative damage of proteins, for example, through post-translational modifications.
+
+-   No specific PTMs were selected here. All of the PTMs were used for the comparison.
+
+-   The number of modifications that occur on proteins are compared between those that associated with ageing and the remaining ones.
+
+-   Modification counts were normalised using the number of the proteins present in each group. eg there are 1052 ageing proteins that were present in the dataset. The counts of each modification was divided by this number.
+
+-   A modification is characterised by the UNIMOD accession number and the residue. The location is not taken into account here. (modification = ptm_name + ptm_res)
+
+Looking at the modifications in proteins related to ageing and those that are not related to ageing.
+
+```{r}
+# Filter for the human proteins
+ageing_proteins <- ageing_proteins %>% filter(Animal == 'Human')
+
+ageing_proteins_ids <- ageing_proteins %>% select('Uniprot entry') %>% distinct()
+
+write.table(ageing_proteins_ids, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/ageing_proteins_ids.tsv',sep = '\t', quote = F, row.names = F)
+
+ageing_abundance <- inner_join(human_ptms, ageing_proteins_ids, by = join_by(LeadProt == 'Uniprot entry'))
+
+ageing_abundance$modification <- paste(ageing_abundance$ptm_name, ageing_abundance$ptm_res, sep = "_")
+
+ageing_abundance_sum <- ageing_abundance %>% 
+  group_by(modification) %>% 
+  summarise(mean = mean(total_counts)/1052)
+
+ageing_abundance_sum$group <- 'ageing'
+# now look at all of the proteins that are not included in the ageing related proteins list.
+
+complementary_data <- anti_join(human_ptms, ageing_proteins_ids, by = join_by(LeadProt == 'Uniprot entry'))
+
+complementary_data$modification <- paste(complementary_data$ptm_name, complementary_data$ptm_res, sep = "_")
+complementary_data %>% distinct(LeadProt) %>% dim()
+
+complementary_data_sum <- complementary_data %>% 
+  group_by(modification) %>% 
+  summarise(mean = mean(total_counts)/17877)
+
+complementary_data_sum$group <- 'non-ageing' 
+
+complete <- rbind(complementary_data_sum, ageing_abundance_sum)
+
+# Outliers are excluded
+ggplot(complete, aes(x = group, y = mean)) +
+  geom_boxplot(outliers = F)
+```
+
+Checking assumptions before performing a parametric test.
+
+```{r}
+with(complete, shapiro.test(mean[group == "ageing"]))
+```
+
+```{r}
+with(complete, shapiro.test(mean[group == "non-ageing"]))
+```
+
+Visualising the distribution of the modification counts.
+
+```{r}
+complete %>% filter(group == 'ageing') %>%
+  ggplot( aes(x = mean)) +
+  geom_histogram() +
+  labs(title = 'Distribution of the modification counts in ageing proteins', x = 'Normalised modification count')
+```
+
+```{r}
+complete %>% filter(group == 'non-ageing') %>%
+  ggplot(aes(x = mean)) +
+  geom_histogram() +
+  labs(title = 'Distribution of the modification counts in non-ageing proteins', x = 'Normalised modification count')
+```
+
+```{r}
+res.ftest <- var.test(mean ~ group, data = complete)
+res.ftest
+```
+
+```{r}
+# Compute t-test
+res <- t.test(mean ~ group, data = complete, var.equal = TRUE)
+res
+```
+
+### Conclusion
+
+There is a significant difference between the number of modifications in ageing proteins and in non-ageing proteins.
+
+-   Do the modifications differ between the proteins associated with ageing and those that are not?
+
+    -   All of the modifications are the same. There isn't a single modification
+
+```{r}
+ageing_modifications <- ageing_abundance %>% select(modification) %>% distinct()
+nonageing_modifications <- complementary_data %>% select(modification) %>% distinct()
+anti_join(ageing_modifications, nonageing_modifications)
+
+```
+
+### oxPTMs
+
+A list of oxPTMs was adapted from [this paper](https://pubs.acs.org/doi/10.1021/cr300073p).
+
+-   One of the common classes of PTMs that are present in ageing proteins are oxPTMs. These PTMs were identified (see Table in the literature study).
+
+```{r}
+oxPTMs <- read.table(file = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis/oxPTMs_unimod.txt', header = T)
+
+ageing_abundance$unimod_id <- as.numeric(gsub("\\[|\\].*", "", ageing_abundance$ptm_name))
+complementary_data$unimod_id <- as.numeric(gsub("\\[|\\].*", "", complementary_data$ptm_name))
+
+ageing_abundance_oxi <- inner_join(ageing_abundance, oxPTMs, by = join_by(unimod_id == ID))
+complementary_data_oxi <- inner_join(complementary_data, oxPTMs, by = join_by(unimod_id == ID))
+
+#normalise
+ageing_abundance %>% distinct(LeadProt) %>% dim()
+ageing_n <- 1052
+
+complementary_data %>% distinct(LeadProt) %>% dim()
+nonageing_n <- 17788
+
+ageing_abundance_oxi_sum <- ageing_abundance_oxi %>% 
+  group_by(modification) %>% 
+  summarise(mean = mean(total_counts)/1052)
+
+complementary_data_oxi_sum <- complementary_data_oxi %>% 
+  group_by(modification) %>% 
+  summarise(mean = mean(total_counts)/17788)
+
+ageing_abundance_oxi_sum$group <- 'ageing'
+complementary_data_oxi_sum$group <- 'non-ageing'
+
+complete <- rbind(ageing_abundance_oxi_sum, complementary_data_oxi_sum)
+```
+
+```{r}
+ggplot(complete, aes(x = group, y = mean)) +
+  geom_boxplot()
+```
+
+```{r}
+# Compute t-test
+res <- t.test(mean ~ group, data = complete, var.equal = TRUE)
+res
+```
+
+## Post-translational modifications in collagen are proportional to age
+
+Long-lived proteins can be used as estimators of chronological age. Long-lived proteins can be defined in different ways, for example based on the half-life of the protein when compared to the average half-life of proteins in the organism. In this case, long-lived proteins were obtained from the following study: [paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3788602/). Proteins were classified as long-lived based on their degree of degradation during the experiment and therefore it was possible to discover new long-lived proteins (no *a priori* assumptions were made).
+
+The study identified a list of long-lived proteins in rats, therefore human orthologs of these proteins were found.
+
+The following approach is tested:
+
+-   Long-lived proteins reside in the cell for longer than most other proteins e.g. collagen in cartilage has a half-life of [117](https://www-sciencedirect-com.kuleuven.e-bronnen.be/science/article/pii/S0021925819558288#:~:text=From%20the%20age%2Drelated%20increases,half%2Dlives%20of%20these%20collagens.). Therefore, these proteins are likely to reside in the body during its complete lifespan.
+
+-   During this time, long-lived proteins are susceptible to PTMs and given their residence time in the body, should accumulate PTMs accordingly.
+
+-   Oxidative damage is known to occur with age.
+
+-   This means that the abundance of oxPTMs in long-lived proteins could be used as an estimator of chronological age.
+
+(It is worth mentioning that there are studies that state that these long-lived proteins are able to reside in the body for an extended period of time because they are resistant to cumulative damage. Could be interesting to look at their stability or other factors that influence this, if indeed no correlations are found.)
+
+-   The number of collage oxPTMs used as the age variable.
+
+-   Now test the abundances of other PTMs.
+
+Analysis:
+
+-   The list of orthologs was taken and identifier of collagen were selected. The following gene names were found: Col6a1, Col6a3, Col4a2 and Col1a1.
+
+-   The mean number of modifications in collagen was determined.
+
+-   The counts were normalised using the raw fiIes that were downloaded from PRIDE (some files cannot be processed by ionbot, therefore some projects are only partially analysed). Also the counts are rescaled to 1-100 (is this even necessary?). The raw files were obtained using the PRIDE API.
+
+```{r}
+human_ptms %>% filter(LeadProt == 'P02452') %>% select(project_id) %>% distinct() %>% dim()
+
+human_ptms %>% select(project_id) %>% distinct() %>% dim()
+```
+
+```{r}
+
+col_ptms <- human_ptms %>% filter(LeadProt == 'P02452')
+  
+
+
+col_ptms$unimod_id <- as.numeric(gsub("\\[|\\].*", "", col_ptms$ptm_name))
+
+col_ptms_oxi <- inner_join(col_ptms, oxPTMs, by = join_by(unimod_id == ID))
+
+median_col_mod <- col_ptms_oxi %>% group_by(project_id) %>% summarise(median_col_mod = median(total_counts))
+```
+
+Does the median number of oxPTMs correlate with the median number of oxPTM modifications of collage COL1A1?
+
+```{r}
+
+human_ptms$unimod_id <- as.numeric(gsub("\\[|\\].*", "", human_ptms$ptm_name))
+df <- inner_join(human_ptms, oxPTMs, by = join_by(unimod_id == ID))
+df <- df %>% filter(!LeadProt == 'P02452')
+df <- df %>% filter(!LeadProt == 'P08123')
+
+mean_mod_count <- df %>% group_by(project_id) %>% summarise(mean_mod_count = mean(total_counts))
+
+df2 <- inner_join(mean_mod_count, median_col_mod, by = join_by(project_id == project_id))
+df2 <- df2 %>% filter(median_col_mod < 25)
+```
+
+```{r}
+ggplot(df2, aes(x = median_col_mod, y = mean_mod_count)) +
+  geom_point()
+
+ggplotly()
+```
+
+Changes in acetylation
+
+acetylation divide by the total number of modifications
+
+```{r}
+df3 <- human_ptms %>% filter(ptm_name == '[1]Acetyl') %>%
+  group_by(project_id) %>%
+  summarise(mean_acetyl_counts = mean(total_counts))
+
+df3 <- inner_join(df3, median_col_mod, by = join_by(project_id == project_id))
+df3 <- df3 %>% filter(median_col_mod < 25)
+```
+
+```{r}
+ggplot(df3, aes(x = median_col_mod, y = mean_acetyl_counts)) +
+  geom_point() +
+  geom_smooth(method='lm')
+
+ggplotly()
+```
+
+```{r}
+model <- lm(mean_acetyl_counts ~ median_col_mod, data = df3)
+ 
+# Perform the significance test
+summary(model)
+```
+
+```{r}
+df3 <- human_ptms %>% filter(ptm_name == '[1]Acetyl') %>%
+  group_by(project_id) %>%
+  summarise(sum_acetyl_counts = sum(total_counts))
+
+df3 <- inner_join(df3, median_col_mod, by = join_by(project_id == project_id))
+df3 <- df3 %>% filter(median_col_mod < 25)
+```
+
+```{r}
+ggplot(df3, aes(x = median_col_mod, y = sum_acetyl_counts)) +
+  geom_point() +
+  geom_smooth(method='lm')
+
+ggplotly()
+```
+
+```{r}
+model <- lm(sum_acetyl_counts ~ median_col_mod, data = df3)
+ 
+# Perform the significance test
+summary(model)
+```
+
+Trying to normalise the PTM counts
+
+```{r}
+sum_ptms <- human_ptms %>% group_by(project_id) %>%
+  summarise(sum_ptms = sum(total_counts))
+
+mean_ptms <- human_ptms %>% group_by(project_id) %>%
+  summarise(mean_ptms = mean(total_counts))
+```
+
+```{r}
+df4 <-inner_join(median_col_mod, sum_ptms, by = join_by(project_id == project_id))
+
+df4 <- df4 %>% filter(median_col_mod <25)
+
+ggplot(df4, aes(x = median_col_mod, y = sum_ptms)) +
+  geom_point() +
+  geom_smooth(method='lm') +
+  stat_regline_equation(label.x = 10, label.y = 750000)
+```
+
+```{r}
+model <- lm(sum_ptms ~ median_col_mod, data = df4)
+ 
+# Perform the significance test
+summary(model)
+```
+
+```{r}
+df5 <-inner_join(median_col_mod, mean_ptms, by = join_by(project_id == project_id))
+
+df5 <- df5 %>% filter(median_col_mod <25)
+
+ggplot(df5, aes(x = median_col_mod, y = mean_ptms)) +
+  geom_point()
+```
+
+Testing statistical significance
+
+```{r}
+model <- lm(mean_ptms ~ median_col_mod, data = df5)
+ 
+# Perform the significance test
+summary(model)
+```
+
+-   The problem with the above approaches is that if the project had more samples then the number of modifications in that project will also be greater. This is true for when the total abundance is used and when the
+
+-   Changing the normalisation
+
+-   Max value = 100
+
+```{r}
+norm <- inner_join(human_ptms, ptms_per_project, by = join_by(project_id == project_id))
+norm <- norm %>% mutate(norm_counts = 100*(total_counts.x/total_counts.y))
+```
+
+-   We will now look at only the sum of the norm counts.
+
+-   This is for all PTMs together
+
+```{r}
+mean_mod_count <- norm %>% group_by(project_id) %>% summarise(mean_norm_count = mean(norm_counts))
+
+df6 <- inner_join(mean_mod_count, median_col_mod, by = join_by(project_id == project_id))
+df6 <- df6 %>% filter(median_col_mod < 25)
+```
+
+```{r}
+ggplot(df6, aes(x = median_col_mod, y = mean_norm_count)) +
+  geom_point() +
+  geom_smooth(method='lm')
+
+ggplotly()
+```
+
+-   Now looking at only the mean number of oxPTMs
+
+```{r}
+df7 <- inner_join(norm, oxPTMs, by = join_by(unimod_id == ID)) %>% group_by(project_id) %>%
+  summarise(mean_norm_count = mean(norm_counts)) %>% 
+  inner_join(median_col_mod, by = join_by(project_id == project_id)) %>%
+  filter(median_col_mod < 25)
+```
+
+```{r}
+ggplot(df7, aes(x = median_col_mod, y = mean_norm_count)) +
+  geom_point() +
+  geom_smooth(method='lm')
+
+ggplotly()
+```
+
+-   Now looking at the sum of all the oxPTMs instead of the mean
+
+```{r}
+df8 <- inner_join(norm, oxPTMs, by = join_by(unimod_id == ID)) %>% group_by(project_id) %>%
+  summarise(sum_norm_count = sum(norm_counts)) %>% 
+  inner_join(median_col_mod, by = join_by(project_id == project_id)) %>%
+  filter(median_col_mod < 25)
+```
+
+```{r}
+ggplot(df8, aes(x = median_col_mod, y = sum_norm_count)) +
+  geom_point() +
+  geom_smooth(method='lm')
+
+ggplotly()
+```
+
+## 

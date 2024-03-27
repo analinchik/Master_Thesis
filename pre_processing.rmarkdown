@@ -1,0 +1,143 @@
+---
+title: "MS3_human"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+params:
+  organism: human
+---
+
+```{r setup, include=FALSE, cache = FALSE}
+require("knitr")
+knitr::opts_knit$set(fig.align = 'center')
+opts_knit$set(root.dir = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis')
+#getwd()
+```
+
+
+# Processing
+
+## Loading the original data
+
+
+```{r}
+#| include: false
+#| label: data_load
+#| message: false
+library(kableExtra) # isn't really used anymore
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readxl)
+
+human_df <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/Human-separateProjects.csv", header = T)
+```
+
+
+## Selecting post-translational modifications
+
+-   Selecting only `Post-translational` modifications.
+-   Expanding the dataset so that each row is an individual modification i.e. removing the `total_counts` variable.
+
+
+```{r}
+#| echo: false
+#| label: PTMs
+#| warning: false
+human_ptms <- human_df %>% filter(ptm_class == "Post-translational")
+# expanding the counts column
+human_ptms_expanded <- human_ptms[rep(1:nrow(human_ptms), human_ptms$total_counts), ]
+human_ptms_expanded <- human_ptms_expanded %>% select(-total_counts)
+```
+
+
+After filtering out all of the other modifications the final dimensions of the data frame are `r dim(human_ptms)`.
+
+# Protein half-lives
+
+Protein half-lives were used as a measure of protein turnover rates. There is no overall database with all of the protein half-lives, therefore the data was found in different papers.
+
+**Human** protein life-times were downloaded from the following paper: https://www.science.org/doi/10.1126/science.1199784#appendix
+
+-   The half-lives were given for each gene name, therefore LeapProt IDs were mapped to gene names using data from UniProt. IDs that could not be mapped directly, were mapped manually.
+
+**Human** protein life-times were downloaded from the following paper: [Systematic study of the dynamics and half-lives of newly synthesized proteins in human cells](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5975921/). The necessary data can be found in the Supplementary Material section (Supplementary table 3 - Table S3), in the fourth file with the name `SC-007-C5SC03826J-s004.xlsx`.
+
+
+```{r}
+#| label: half-lives
+#| echo: false 
+#| warning: false #The warnings can be ignored because they are for other columns. 
+
+# the half-life is in hours
+hl_dynamics<- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/proteome_hl_dynamics.txt", header = T, sep = " ", skip = 1)
+
+idmapping <- idmapping_manual <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/idmapping_proteome_hl_dynamics.tsv", header = T, sep = "\t")
+idmapping_manual <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/idmapping_manual.txt", header = T, sep = "\t")
+idmapping <- rbind(idmapping, idmapping_manual)
+
+hl_dynamics_merged <- inner_join(idmapping, hl_dynamics, by = join_by(From == Gene_symbol))
+hl_dynamics_merged <- hl_dynamics_merged %>% select(UniProtID = Entry, half_life_hours)
+
+### The second set of half-lives 
+hl_new_synth <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/half_lives/newly_synthesised_protein_hl.xlsx', skip = 1) %>% 
+  select('Uniprot ID','t1/2 (hour)')
+# some of the proteins have the same half lives and they are listed together
+names(hl_new_synth) <- c("UniProtID", "half_life_hours")
+
+hl <- rbind(hl_new_synth, hl_dynamics_merged)
+hl <- hl %>% group_by(UniProtID) %>% 
+  summarise(mean_hl_hours = mean(half_life_hours))
+
+write.table(hl, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/hl.tsv', row.names = F, sep="\t", quote = F)
+```
+
+
+Matching protein half-lives and PTMs based on the UniProtID. The entries for which no half lives were found, will be removed. The dimensions before adding half-lives (filtered for `Post-translational`): `r dim(human_ptms)`
+
+The dimensions after adding half-lives: `r dim(human_ptms_with_hl)`.
+
+
+```{r}
+human_ptms_expanded_hl <- inner_join(human_ptms_expanded, hl, by= join_by(LeadProt == UniProtID))
+
+write.table(human_ptms_expanded_hl, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl.tsv', row.names = F, sep="\t", quote = F)
+```
+
+
+# Adding protein lengths
+
+
+```{r}
+lengths <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_lengths_human.tsv", sep = '\t')
+lengths <- lengths %>% select(UniProt = From,  Length)
+
+# there are some duplications for the lengths
+lengths <- lengths %>% 
+  group_by(UniProt) %>%
+  summarise(Length = mean(Length))
+
+human_ptms_expanded_length <- inner_join(human_ptms_expanded, lengths, by = join_by(LeadProt == UniProt))
+
+write.table(human_ptms_expanded_length, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_length.tsv', row.names = F, sep="\t", quote = F)
+
+write.table(lengths, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/lengths.tsv', row.names = F, sep="\t", quote = F)
+```
+
+
+# Complete dataset with half-lives and lengths
+
+
+```{r}
+human_ptms_expanded_hl_lengths <- inner_join(human_ptms_expanded_hl, lengths, by = join_by(LeadProt == UniProt))
+
+write.table(human_ptms_expanded_hl_lengths, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl_lengths.tsv', row.names = F, sep="\t", quote = F)
+```
+

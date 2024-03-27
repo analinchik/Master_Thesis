@@ -1,0 +1,109 @@
+---
+title: "Age_study"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+params:
+  organism: human
+---
+
+```{r setup, include=FALSE, cache = FALSE}
+require("knitr")
+knitr::opts_knit$set(fig.align = 'center')
+## setting working directory
+opts_knit$set(root.dir = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis')
+
+library(dplyr)
+library(ggplot2)
+```
+
+PXD004713: https://www.ebi.ac.uk/pride/archive/projects/PXD004713
+
+PXD010469: https://www.ebi.ac.uk/pride/archive/projects/PXD010469
+
+```{r}
+human_ptms_expanded_hl_lengths <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl_lengths.tsv", header = T, sep = '\t')
+
+PXD010469 <-  human_ptms_expanded_hl_lengths %>% filter(project_id == 'PXD010469')
+PXD010469 <- PXD010469 %>% mutate(project = 'PXD010469-young')
+PXD010469 <- PXD010469 %>% select(Uniprot_entry_name, ptm_name, project)
+names(PXD010469) <- c('Entry', 'ptm_name', 'project')
+PXD010469 <- PXD010469 %>% group_by(Entry, ptm_name) %>% 
+  mutate(count_per_protein = n()) %>% distinct()
+PXD010469 <- PXD010469 %>% group_by(Entry) %>% 
+  mutate(total_count = sum(count_per_protein)) 
+
+PXD004713 <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/PXD004173-mapped-ptms.csv", header = T)
+PXD004713 <- PXD004713[rep(1:nrow(PXD004713), PXD004713$psm_total_counts), ]
+PXD004713 <- PXD004713 %>% select(-psm_total_counts)
+PXD004713 <- PXD004713 %>% mutate(project = 'PXD004713-old')
+PXD004713 <- PXD004713 %>% select(entry, ModName, project)
+names(PXD004713) <- c('Entry', 'ptm_name', 'project')
+PXD004713 <- PXD004713 %>% group_by(Entry, ptm_name) %>% 
+  mutate(count_per_protein = n()) %>% distinct()
+PXD004713 <- PXD004713 %>% group_by(Entry) %>% 
+  mutate(total_count = sum(count_per_protein))
+
+df <- rbind(PXD004713, PXD010469)
+```
+
+Normalisation
+
+```{r}
+df %>% 
+  group_by(project) %>% 
+  summarise(sum(count_per_protein))
+
+#251452
+#1013
+
+df <- df %>% 
+  mutate(norm_count_per_protein = 100*(count_per_protein/ifelse(project == 'PXD004713-old', 251452, 1013)))
+
+```
+
+```{r}
+df %>%
+  filter(grepl("Oxidation", ptm_name)) %>% filter(count_per_protein < 200) %>%
+  ggplot(aes(x = project, y = count_per_protein)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Values Faceted by Category") +
+  theme_minimal()
+```
+```{r}
+p2 <- ggplot(data=df, aes(x=norm_count_per_protein, group=project, fill=project)) +
+    geom_density(adjust=1.5, alpha=.4) +
+    theme_bw()
+p2
+
+```
+```{r}
+p <- df %>% filter(norm_count_per_protein < 0.1) %>%
+  ggplot( aes(x=norm_count_per_protein, fill=project)) +
+    geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
+    scale_fill_manual(values=c("#69b3a2", "#404080")) +
+    theme_bw() +
+    labs(fill="")
+p
+```
+
+There are 22 + 22 people in the PXD004713 project and 12 urine samples in the other project.
+
+```{r}
+df %>% ggplot(aes(x = norm_count_per_protein)) +
+  geom_histogram(fill = '#73BFB8') +
+  theme_linedraw()
+```
+
+```{r}
+df %>% 
+  group_by(project) %>% 
+  summarise(sum(norm_count_per_protein))
+```
