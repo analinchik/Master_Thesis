@@ -26,8 +26,11 @@ library(plotly)
 human_ptms_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_hl.tsv", header = T, sep = '\t')
 cell_types_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_cell_types.tsv', header = T, sep = '\t')
 long_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_cell_types.tsv', header = T, sep = '\t')
-ageing_proteins <- read_excel( '/Users/anastasialinchik/Desktop/Thesis/DATA/Age-correlated protein.xlsx')
-oxPTMs <- read.table(file = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis/oxPTMs_unimod.txt', header = T)
+ageing_proteins <- read_excel( '/Users/anastasialinchik/Desktop/Thesis/DATA/Age-correlated protein.xlsx') %>% filter(Animal == 'Human') %>% dplyr::select(`Uniprot entry`)
+ageing_proteins <- human_ptms_hl %>% filter(LeadProt %in% ageing_proteins$`Uniprot entry`)
+oxPTMs <- read.table(file = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis/oxPTMs_unimod.txt', header = T) 
+hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/hl.tsv', header = T, sep = '\t')
+genage <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv', header = T)
 ```
 
 ## PTMs and protein half-lives
@@ -48,17 +51,22 @@ Approach:
 
 -   Test whether the abundance of these PTMs changes between the long-lived proteins and the normal proteins.
 
-The distribution of protein half-lives in the dataset can be seen here:
+Below is a comparison of the distribution of the half-lives that was found in literature and the distribution of a subset of those half-lives in the proteins found in the dataset.
 
 ```{r}
 #| echo: false
-ggplot(human_ptms_expanded_hl, aes(x = mean_hl_hours, weight = norm_counts)) +
-  geom_histogram(bins = 50, fill = "#5DB7B1") + 
-  labs(title = 'Distribution of half-lives among proteins with PTMs', x = 'Mean half-lives (hours)', y = 'Normalised counts') +
-  theme_classic()
+
+ggplot() +
+  geom_density(data = hl, aes(x = mean_hl_hours, fill = 'Half-lives in papers'), alpha = 0.7, bw = 0.4) +
+  geom_density(data = human_ptms_expanded_hl, aes(x = mean_hl_hours, fill = 'Proteins in the dataset'), alpha = 0.7, bw = 0.4) + 
+  labs(title = 'Distributions of protein half-lives', x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500'))  # Manually specify fill colors
 ```
 
-The above distribution shows that the mean half-life of a protein in this dataset is 8.37 hours, which is within the expected range when compared to values found in [literature](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3788602/).
+-   There is an enrichment of proteins with short half-lives and proteins with half-lives just below 10 hours.
+
+The weighted mean half-life of proteins in the dataset is 8.37 hours, which is within the expected range when compared to values found in [literature](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3788602/).
 
 ```{r}
 #| echo: false
@@ -99,17 +107,18 @@ outliers_df <- human_ptms_expanded_hl %>%
   filter(mean_hl_hours < lower_bound | mean_hl_hours > upper_bound)
 
 ggplot(outliers_df, aes(y = mean_hl_hours, weight = norm_counts)) +
-  geom_boxplot(fill = "#5DB7B1") + 
+  geom_boxplot() + 
   labs(title = 'Distribution of half-lives among outlier proteins', y = 'Mean half-lives (hours)') +
   theme_classic()
 ```
 
 Though the mean half-life of these proteins is higher than the mean half-life of the whole dataset, none of the outlier proteins can be classified as long-lived proteins. Proteins can be classified as long-lived when their mean half-life exceeds 48 hours ([ref](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5500981/#:~:text=Many%20of%20your%20body's%20proteins,%2Dlived%20protein%20(LLP).)), though this is an arbitrary definition. Nonetheless, the change in PTM abundances can still be investigated.
 
-Violin plot for oxPTMs:
-
 ```{r}
 #| echo: false
+#| include: false
+
+# Violin plot for oxPTMs
 human_ptms_oxPTMs <- human_ptms_hl %>% filter(unimod_id %in% oxPTMs$ID)
 
 ggplot(human_ptms_oxPTMs, aes(x = '', y = mean_hl_hours, weight = norm_counts)) +
@@ -123,76 +132,21 @@ ggplot(human_ptms_oxPTMs, aes(x = '', y = mean_hl_hours, weight = norm_counts)) 
 -   Is the small peak due to the distribution of the half-lives found in various papers? This can be checked using the plot below.
 -   The plot below has only one peak, meaning that small peak previously seen in the violin plot is not due to the distribution of the original half-lives.
 
-```{r}
-#| echo: false
-ggplot(hl, aes(mean_hl_hours)) +
-  geom_histogram(bins = 40) +
-  labs(x = 'Mean half-life (hours)', y = 'Counts', title = 'Distribution of the half-lives found in papers') +
-  theme_classic()
-```
-
 Below are the proteins that are present in the first peak in the violin plot.
 
 ```{r}
 #| echo: false
 #| eval: true
+
 short_hl_proteins <- human_ptms_hl %>% filter(mean_hl_hours < 2.3) %>% dplyr::select(LeadProt) %>%
   distinct()
 
 kable(short_hl_proteins)
 ```
 
-ANOVA:
-
-The group sizes are so large (there are 1 million entries between the 5 groups) that even a small difference between the groups will result in significant p-values.
-
-```{r}
-#| echo: false
-#| eval: false
-
-human_ptms_expanded_hl_top5$ptm_name <- factor(human_ptms_expanded_hl_top5$ptm_name)
-# ANOVA
-anova_result <- aov(mean_hl_hours ~ ptm_name, data = human_ptms_expanded_hl_top5)
-summary(anova_result)
-
-# Post-hoc tests
-posthoc_tests <- glht(anova_result, linfct = mcp(ptm_name = "Tukey"))
-summary(posthoc_tests)
-
-# Checking ANOVA assumptions
-
-# 1. Independence: Assumed to be met during experimental design.
-
-# 2. Normality of residuals
-residuals <- residuals(anova_result)
-hist(residuals, main = "Histogram of Residuals")
-qqnorm(residuals)
-qqline(residuals)
-
-# Shapiro-Wilk test for normality
-shapiro.test(residuals)
-
-# 3. Homogeneity of variances
-plot(anova_result, 1)  # 1 corresponds to residuals vs fitted values
-# Levene's test for homogeneity of variances
-leveneTest(anova_result)
-
-# 4. Linearity: Assumed to be met during model specification.
-```
-
 ### Phosphorylation
 
 -   Only the modification \[21\]Phospho is present here.
-
-```{r}
-#| echo: false
-human_ptms_expanded_hl_phospho <- human_ptms_hl %>% filter(ptm_name == '[21]Phospho')
-
-ggplot(human_ptms_expanded_hl_phospho, aes(x = mean_hl_hours, weight = norm_counts)) +
-  geom_histogram(bins = 50) + 
-  labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
-  theme_classic()
-```
 
 Splitting the dataset in a group with phosphorylation proteins and another group with all remaining proteins.
 
@@ -207,18 +161,34 @@ ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fil
   theme_classic()
 ```
 
+Distribution of phosphorylated ageing proteins vs phosphorylated non-ageing proteins vs non-phosphorylated proteins
+
+```{r}
+pho_age_prot <- ageing_proteins %>% 
+  filter(unimod_id == 21) 
+
+pho_age_prot <- human_ptms_hl %>% 
+  filter(unimod_id == 21) %>%
+  filter(Uniprot_entry_name %in% genage$uniprot)
+
+pho_no_age_prot <- human_ptms_hl %>% filter(unimod_id == 21) %>%
+  filter(!LeadProt %in% pho_age_prot$LeadProt)
+
+no_pho_prot <-  human_ptms_hl %>% filter(!unimod_id == 21) %>%
+  filter(!LeadProt %in% pho_age_prot$LeadProt)
+
+ggplot() +
+  geom_density(data = no_pho_prot, aes(x = mean_hl_hours, fill = 'no_pho_prot'), alpha = 0.7, bw = 0.4) +
+  geom_density(data = pho_no_age_prot, aes(x = mean_hl_hours, fill = 'pho_no_age_prot'), alpha = 0.7, bw = 0.4) +
+   geom_density(data = pho_age_prot, aes(x = mean_hl_hours, fill = 'pho_age_prot'), alpha = 0.7, bw = 0.6) +
+  labs(title = 'Distributions of protein half-lives', x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_pho_prot' = '#FB8500', 'pho_no_age_prot' = '#2364AA','pho_age_prot'  = "#5DB7B1"), name = 'Legend', breaks = c('no_pho_prot', 'pho_no_age_prot','pho_age_prot' ))  # Manually specify fill colors
+```
+
 ### Methylation
 
 -   Filtered by the \[34\]Methyl modification
-
-```{r}
-#| echo: false
-human_ptms_expanded_hl_phospho <- human_ptms_hl %>% filter(ptm_name == '[34]Methyl')
-ggplot(human_ptms_expanded_hl_phospho, aes(x = mean_hl_hours, weight = norm_counts)) +
-  geom_histogram(bins = 50) + 
-  labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
-  theme_classic()
-```
 
 ```{r}
 human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl$unimod_id == 34, 'Methyl', 'Non-Methyl')
@@ -232,15 +202,6 @@ ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fil
 ### Acetylation
 
 -   Filtered by the \[1\]Acetyl modification
-
-```{r}
-#| echo: false
-human_ptms_expanded_hl_phospho <- human_ptms_hl %>% filter(ptm_name == '[1]Acetyl')
-ggplot(human_ptms_expanded_hl_phospho, aes(x = mean_hl_hours, weight = norm_counts)) +
-  geom_histogram(bins = 50) + 
-  labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
-  theme_classic()
-```
 
 ```{r}
 #| echo: false
@@ -338,6 +299,64 @@ oxPTMs_hl$group <- if_else(oxPTMs_hl$LeadProt %in% short_hl_proteins$LeadProt, '
 ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs, colour = group)) +
   geom_point() +
   theme_classic()
+
+ggplotly()
+```
+
+What are the protein in the bottom part?
+
+```{r}
+oxPTMs_hl <- human_ptms_hl %>% 
+  inner_join(oxPTMs, by = join_by(unimod_id == ID)) %>%
+  group_by(LeadProt) %>%
+  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
+  distinct()
+
+unmodified <- oxPTMs_hl %>% filter(sum_oxPTMs <3) %>% dplyr::select(LeadProt)
+
+iupred_scores_ratios <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv', header = T, sep = '\t')
+
+df2 <- iupred_scores_ratios %>% filter(UniProt_ID %in% unmodified$LeadProt)
+
+hist(df2$Ratio_Above_0.5)
+
+df3 <- mt %>% filter(Protein_ID %in% unmodified$LeadProt)
+
+hist(df3$mean_mt)
+```
+
+Colour based on stability
+
+```{r}
+oxPTMs_hl <- human_ptms_hl %>% 
+  inner_join(oxPTMs, by = join_by(unimod_id == ID)) %>%
+  group_by(LeadProt) %>%
+  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
+  distinct() %>% inner_join(mt, by = join_by(LeadProt == Protein_ID))
+
+oxPTMs_hl$group <- if_else(oxPTMs_hl$mean_mt > 55, '> 55', '< 55') #SHL = short half-life, NHL = normal half-life
+ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs, colour = group)) +
+  geom_point() +
+  theme_classic()
+
+ggplotly()
+```
+
+Now look at the melting temp:
+
+```{r}
+oxPTMs_hl <- human_ptms_hl %>% 
+  inner_join(oxPTMs, by = join_by(unimod_id == ID)) %>%
+  group_by(LeadProt) %>%
+  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
+  distinct() %>% inner_join(mt, by = join_by(LeadProt == Uniprot_ID))
+
+oxPTMs_hl$group <- if_else(oxPTMs_hl$Ratio_Above_0.5 > 0.5, '>0.5', '<0.5') #SHL = short half-life, NHL = normal half-life
+ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs, colour = group)) +
+  geom_point() +
+  theme_classic()
+
+ggplotly()
 ```
 
 ## PTMs in long-lived proteins
@@ -357,6 +376,52 @@ human_ptms_hl_long_proteins <- rbind(long_lived_proteins_hl, human_ptms_hl)
 
 human_ptms_hl_long_proteins$group <- if_else(human_ptms_hl_long_proteins$LeadProt %in% long_lived_proteins$LeadProt, 'long lived', 'non-long lived')
 ```
+
+Just the long-lived proteins.
+
+```{r}
+ggplot(long_lived_proteins_hl, aes(x = mean_hl_hours, weight = norm_counts)) +
+  geom_histogram(bins = 50) +
+  labs(title = 'Distribution of half-lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+  theme_classic()
+```
+
+```{r}
+#|echo: false
+human_ptms_hl_oxi <- long_lived_proteins_hl %>% filter(unimod_id %in% oxPTMs$ID)
+
+ggplot(human_ptms_hl_oxi, aes(x = mean_hl_hours, weight = norm_counts)) +
+  geom_histogram(bins = 50) +
+  labs(title = 'Distribution of half-lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+  theme_classic()
+```
+
+```{r}
+#| echo: false
+#| warning: false
+oxPTMs_hl <- long_lived_proteins_hl %>% 
+  group_by(LeadProt) %>%
+  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
+  distinct()
+
+ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = F)
+  theme_classic()
+
+ggplotly()
+```
+
+look at the 114 protein CO6A3_HUMAN
+
+```{r}
+human_ptms %>% filter(Uniprot_entry_name == 'CO6A3_HUMAN') %>%
+  group_by(project_id) %>% summarise(counts = sum(norm_counts)) %>% arrange(desc(counts))
+  ggplot(aes(y = counts, x = project_id)) +
+  geom_bar(stats = 'identity')
+```
+
+### Long-lived proteins + the rest
 
 The plot below shows the distribution of the half-lives of proteins with oxPTMs (normalised counts were used). Clearly there is a much greater number of short lived proteins compared to long-lived proteins.
 
