@@ -85,7 +85,7 @@ After filtering out all of the other modifications the final dimensions of the d
 
 Protein half-lives were used as a measure of protein turnover rates. There is no overall database with all of the protein half-lives, therefore the data was found in different papers.
 
-**Human** protein life-times were downloaded from the following paper: https://www.science.org/doi/10.1126/science.1199784#appendix
+**Human** protein life-times were downloaded from the following [paper](https://www.science.org/doi/10.1126/science.1199784#appendix): https://www.science.org/doi/10.1126/science.1199784#appendix
 
 -   The half-lives were given for each gene name, therefore LeapProt IDs were mapped to gene names using data from UniProt. IDs that could not be mapped directly, were mapped manually.
 
@@ -240,27 +240,8 @@ monocytes <- monocytes %>% group_by(gene_name) %>%
 monocytes$cell_type <- 'monocytes' 
 
 
-# hepatocytes
 
-hepatocytes1 <- subset(long_lived_proteins_hl, select = c(1,14,15))
-hepatocytes2 <- subset(long_lived_proteins_hl, select = c(1,17,18))
-hepatocytes1 <- na.omit(hepatocytes1)
-hepatocytes2 <- na.omit(hepatocytes2)
-names(hepatocytes1) <- c('gene_name', 'half_life', 'quality')
-names(hepatocytes2) <- c('gene_name', 'half_life', 'quality')
-hepatocytes <- rbind(hepatocytes1, hepatocytes2)
-quality <- if_else(hepatocytes$quality == 'good', 1, 0)
-hepatocytes$quality <- quality
-# only include cells with good quality
-hepatocytes <- hepatocytes %>% filter(quality == 1)
-
-
-hepatocytes <- hepatocytes %>% group_by(gene_name) %>%
-  summarise(mean_hl = mean(half_life)) 
-
-hepatocytes$cell_type <- 'hepatocytes' 
-
-cell_types_hl <- rbind(Bcells, NKcells, hepatocytes, hepatocytes)
+cell_types_hl <- rbind(Bcells, NKcells, monocytes)
 cell_types_hl <- cell_types_hl %>% group_by(gene_name) %>%
   summarise(mean_hl = mean(mean_hl))
 

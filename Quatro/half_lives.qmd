@@ -1,5 +1,5 @@
 ---
-title: "Half-lives"
+title: "PTMs and protein half-lives"
 format: html
 editor: visual
 ---
@@ -33,23 +33,27 @@ hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/hl.
 genage <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv', header = T)
 ```
 
-## PTMs and protein half-lives
-
--   The half-life of a protein is the time it takes for the concentration of a radioactively protein to decrease by a half. Protein half-lives can be used as estimates of residence time of proteins in the cell.
+-   The half-life of a protein is the time it takes for the concentration of a protein to decrease by a half. Protein half-lives can be used as estimates of residence time of proteins in the cell.
 
 -   Proteins that reside longer in the cell may be more susceptible to oxidative damage.
 
--   Protein half-lives were obtained from: [paper1](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5975921/), [paper2](https://www-science-org.kuleuven.e-bronnen.be/doi/10.1126/science.1199784#appendix).
-
 -   It is assumed that each protein only has one modification. The proteins with no modifications are not identified.
 
-### Distribution of protein half-lives
+-   Protein half-lives for short lived proteins can be found here: [Proteome-wide mapping of short-lived proteins in human cells - ScienceDirect (e-bronnen.be)](https://www-sciencedirect-com.kuleuven.e-bronnen.be/science/article/pii/S1097276521007498#app2)
 
-Approach:
+-   Protein half-lives of long-lived proteins can be found here: [Systematic analysis of protein turnover in primary cells \| Nature Communications](https://www.nature.com/articles/s41467-018-03106-1#Sec6)
 
--   Get a list of PTMs that correlate with ageing such as oxPTMs, acetylation etc.
+-   Protein half-lives of mouse proteins can be found here: [An atlas of protein turnover rates in mouse tissues \| Nature Communications](https://www.nature.com/articles/s41467-021-26842-3)
 
--   Test whether the abundance of these PTMs changes between the long-lived proteins and the normal proteins.
+    -   CC_Results: Results for Cricoid Cartilage (Cartilage in manuscript)
+
+```{r}
+short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`)
+long_lived_proteins <- # use the code that you already have
+# mouse_proteins_hl <- 
+```
+
+# Proteins with a short half-life
 
 Below is a comparison of the distribution of the half-lives that was found in literature and the distribution of a subset of those half-lives in the proteins found in the dataset.
 
@@ -141,6 +145,12 @@ short_hl_proteins <- human_ptms_hl %>% filter(mean_hl_hours < 2.3) %>% dplyr::se
 
 kable(short_hl_proteins)
 ```
+
+Approach:
+
+-   Get a list of PTMs that correlate with ageing such as oxPTMs, acetylation etc.
+
+-   Test whether the abundance of these PTMs changes between the long-lived proteins and the normal proteins.
 
 ### Phosphorylation
 
