@@ -56,7 +56,7 @@ human_df %>% group_by(ptm_class) %>%
   summarise(total_counts = sum(total_counts)) %>%
   ggplot(aes(x = reorder(ptm_class, total_counts), y = total_counts)) +
   geom_histogram(stat = 'identity', fill = '#73BFB8') +
-  labs(y = 'Counts of PSMs', x = 'Modification classes', title = 'Abundances of modification classes')+
+  labs(y = 'Counts of PSMs', x = 'Modification classes')+
   coord_flip() +
   theme_classic()
 ```
@@ -91,8 +91,8 @@ human_ptms_grouped_ptm_large <- human_ptms_grouped_ptm %>%
 ggplot(human_ptms_grouped_ptm_large, aes(x = reorder(ptm_name, total_counts), y = total_counts)) +
   geom_bar(stat = "identity", fill = '#73BFB8') +
   coord_flip()+
-  labs(y ='Number of PSM counts', x = 'UNIMOD identifier')+
-  theme_classic(base_size = 16) 
+  labs(y ='Number of PSM counts', x = 'Post-translational modifications')+
+  theme_classic() 
 ```
 
 When defining a PTM using its UNIMOD identifier and the residue that it modified, the number of unique PTMs further increases to 205.
@@ -132,7 +132,7 @@ sum_AA_mod <- human_ptms %>% group_by(ptm_res) %>%
 
 ggplot(sum_AA_mod, aes(x = reorder(ptm_res, -total_counts), y = total_counts)) +
   geom_bar(stat = 'identity', fill = '#73BFB8') +
-  labs(x = 'Residue' , y = 'PSM counts', title = 'Total abundance of PSMs per residue') +
+  labs(x = 'Residue' , y = 'PSM counts') +
   theme_classic()
 ```
 
@@ -150,7 +150,7 @@ diff_PTMs_AA <- human_ptms %>%
 
 ggplot(diff_PTMs_AA, aes(x = reorder(ptm_res, -diff_PTMs), y = diff_PTMs)) +
   geom_bar(stat = 'identity', fill = '#73BFB8') +
-  labs(x = 'Residue' , y = 'Number of different PTMs', title = 'Number of different PTMs per residue') +
+  labs(x = 'Residue' , y = 'Number of different PTMs') +
   theme_classic()
 ```
 
@@ -233,8 +233,8 @@ per_protein_ptms <- human_ptms %>%
 ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
   geom_bar(stat = 'identity', fill = '#73BFB8') +
   coord_flip()+
-  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
-  theme_classic(base_size = 16) 
+  labs(y ='Number of PSM counts', x = 'UniProt entry name')+
+  theme_classic(base_size = 12) 
 ```
 
 Using the normalised counts. The normalisation is done using the number of raw files in a project.
@@ -247,8 +247,8 @@ per_protein_ptms <- human_ptms %>%
 ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
   geom_bar(stat = 'identity', fill = '#73BFB8') +
   coord_flip()+
-  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
-  theme_classic(base_size = 16) 
+  labs(y ='Number of PSM counts', x = 'UniProt entry name')+
+  theme_classic(base_size = 12) 
 ```
 
 Now also normalised using the lengths of each protein.
@@ -262,12 +262,12 @@ human_ptms_lengths <- human_ptms_lengths %>% mutate(norm_lengths = norm_counts/L
 per_protein_ptms <- human_ptms_lengths %>%
   group_by(Uniprot_entry_name) %>%
   summarise(total_counts = sum(norm_lengths)) %>% arrange(desc(total_counts))
-pdf("my_plot.pdf")
+
 ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
   geom_bar(stat = 'identity', fill = '#73BFB8') +
   coord_flip()+
-  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
-  theme_classic(base_size = 16) 
+  labs(y ='Number of PSM counts', x = 'UniProt entry name')+
+  theme_classic(base_size = 12) 
 ```
 
 Now normalise by the raw files and also the abundances
@@ -278,22 +278,57 @@ Now normalise by the raw files and also the abundances
 protein_abundances <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_abundances.tsv", sep = '\t', skip = 11, header = T)
 paxdb_mapping <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/paxdb_mapping.tsv", sep = '\t', skip = 11, col.names = c('paxdb_id', 'UniProt')) %>% filter(grepl("_HUMAN$", UniProt))
 protein_abundances <- inner_join(protein_abundances, paxdb_mapping, by = join_by(string_external_id == paxdb_id)) %>% dplyr::select(-c("string_external_id", "raw_spectral_count"))
-human_ptms_hl_abundances <- inner_join(human_ptms_hl, protein_abundances, by = join_by(Uniprot_entry_name == UniProt))
-
+human_ptms_abundances <- inner_join(human_ptms, protein_abundances, by = join_by(Uniprot_entry_name == UniProt))
 ```
+
+Take the protein abundances into account
 
 ```{r}
 
-human_ptms_hl_abundances <- human_ptms_hl_abundances %>% mutate(norm_lengths = norm_counts/abundance)
-per_protein_ptms <- human_ptms_hl_abundances %>%
+human_ptms_abundances <- human_ptms_abundances %>% mutate(norm_lengths = norm_counts/abundance)
+per_protein_ptms <- human_ptms_abundances %>%
   group_by(Uniprot_entry_name) %>%
   summarise(total_counts = sum(norm_lengths)) %>% arrange(desc(total_counts))
 
 ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
   geom_bar(stat = 'identity', fill = '#73BFB8') +
   coord_flip()+
-  labs(y ='Number of PSM counts', x = 'UniProt entry name', title = 'Top 10 proteins with the most PTMs')+
-  theme_classic(base_size = 16) 
+  labs(y ='Number of PSM counts', x = 'UniProt entry name')+
+  theme_classic(base_size = 12) 
+```
+
+can you take into account length, raw files and abundances?
+
+```{r}
+human_ptms_lengths_abundances <- inner_join(human_ptms_lengths, protein_abundances, by = join_by(`Uniprot_entry_name` == UniProt))
+human_ptms_lengths_abundances <- human_ptms_lengths_abundances %>% mutate(norm_lengths_ab = norm_lengths/abundance)
+
+per_protein_ptms <- human_ptms_lengths_abundances %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(total_counts = sum(norm_lengths_ab)) %>% arrange(desc(total_counts))
+
+
+ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'UniProt entry name')+
+  theme_classic(base_size = 12) 
+```
+
+```{r}
+
+human_ptms_lengths_abundances <- human_ptms_lengths_abundances %>% mutate(norm_lengths_ab = total_counts/(Length*abundance))
+
+per_protein_ptms <- human_ptms_lengths_abundances %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(total_counts = sum(norm_lengths_ab)) %>% arrange(desc(total_counts))
+
+
+ggplot(per_protein_ptms[1:10,], aes(x = reorder(Uniprot_entry_name, total_counts), y = total_counts)) +
+  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  coord_flip()+
+  labs(y ='Number of PSM counts', x = 'UniProt entry name')+
+  theme_classic(base_size = 12) 
 ```
 
 ## Project level
@@ -315,8 +350,8 @@ ptms_per_project <- human_ptms %>%
 ggplot(ptms_per_project[1:10,], aes(x = reorder(project_id, total_counts), y = total_counts)) +
   geom_bar(stat = 'identity', fill = '#73BFB8') +
   coord_flip()+
-  labs(y ='Number of PSM counts', x = 'Project ID', title = 'Top 10 projects with the most PTMs')+
-  theme_classic(base_size = 16) 
+  labs(y ='Number of PSM counts', x = 'Project ID')+
+  theme_classic(base_size = 12) 
 ```
 
 The boxplot below shows the distribution of the total number of PSMs in each project. The outliers have been excluded.
@@ -326,7 +361,7 @@ The boxplot below shows the distribution of the total number of PSMs in each pro
 
 ptms_per_project %>% ggplot(aes(y = total_counts)) +
   geom_boxplot(outliers = F, fill = '#73BFB8') +
-  labs(y = 'PSM counts', title = 'Distribution of the number of PSMs in each project') +
+  labs(y = 'PSM counts') +
   theme_classic()
   
 

@@ -1,0 +1,149 @@
+---
+title: "Localisations"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| include: false
+#| warning: false
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(kableExtra)
+library(ggpubr)
+library(plotly)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+# This is just a filtered by Post-translational
+human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
+localisation <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/localisation_raw.tsv', header = T, sep = "\t") %>% dplyr::select(From, GOcellularcomponent) %>% rename(LeadProt = From, loc = GOcellularcomponent)
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_complete.tsv", header = T, sep = '\t')
+
+oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
+oxPTMs <- oxPTMs %>%
+  mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
+
+human_ptms_loc <- inner_join(human_ptms, localisation, by = join_by(LeadProt)) %>% separate_rows(loc, sep = "; ") 
+```
+
+```{r}
+#| echo: false
+
+df <- human_ptms_loc %>% group_by(loc) %>% summarise(abundance_loc = sum(norm_counts))%>%
+  arrange(desc(abundance_loc))
+
+ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
+  geom_col() +
+  labs(x = 'Sum of normalised PTM counts', y = 'Localisation') +
+  coord_flip() +
+  theme_classic()
+```
+
+# oxPTMs
+
+What are the most common locations of oxPTMs?
+
+```{r}
+df <- human_ptms_loc %>%
+  filter(human_ptms_loc$unimod_id %in% oxPTMs$unimod_id & human_ptms_loc$ptm_res %in% oxPTMs$AAs_list) %>% 
+  group_by(loc) %>% summarise(abundance_loc = sum(norm_counts)) %>%
+  arrange(desc(abundance_loc))
+
+ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
+  geom_col() +
+  coord_flip() +
+  theme_classic()
+```
+
+# Oxidation
+
+```{r}
+df <- human_ptms_loc %>%
+  filter(human_ptms_loc$unimod_id == 35) %>% 
+  group_by(loc) %>% summarise(abundance_loc = sum(norm_counts)) %>%
+  arrange(desc(abundance_loc))
+
+ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
+  geom_col() +
+  coord_flip() +
+  theme_classic()
+```
+
+# Phosphorylation
+
+```{r}
+df <- human_ptms_loc %>%
+  filter(human_ptms_loc$unimod_id == 21) %>% 
+  group_by(loc) %>% summarise(abundance_loc = sum(norm_counts)) %>%
+  arrange(desc(abundance_loc))
+
+ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
+  geom_col() +
+  coord_flip() +
+  theme_classic()
+```
+
+# Acetylation
+
+```{r}
+df <- human_ptms_loc %>%
+  filter(human_ptms_loc$unimod_id == 1) %>% 
+  group_by(loc) %>% summarise(abundance_loc = sum(norm_counts)) %>%
+  arrange(desc(abundance_loc))
+
+ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
+  geom_col() +
+  coord_flip() +
+  theme_classic()
+```
+
+# Methylation
+
+```{r}
+df <- human_ptms_loc %>%
+  filter(human_ptms_loc$unimod_id == 34) %>% 
+  group_by(loc) %>% summarise(abundance_loc = sum(norm_counts)) %>%
+  arrange(desc(abundance_loc))
+
+ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
+  geom_col() +
+  coord_flip() +
+  theme_classic()
+```
+
+# All together
+
+```{r}
+
+df <- human_ptms_loc %>%
+  mutate(mod_group = case_when(
+    unimod_id == 1 ~'Acetyl', 
+    unimod_id == 35 ~'Oxidation', 
+    unimod_id == 21 ~'Phosphorylation',
+    unimod_id == 34 ~'Methylation',
+    unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list ~ 'oxPTMs',
+    TRUE ~ "-"
+  )) %>% filter(!mod_group == '-') %>% 
+  filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+
+df <- df %>% group_by(loc, mod_group) %>% summarise(abundance_loc = sum(norm_counts)) %>% 
+  filter(loc == 'cytosol [GO:0005829]' | loc == 'extracellular exosome [GO:0070062]' | loc == 'cytoplasm [GO:0005737]' | loc == 'nucleus [GO:0005634]')
+
+mod_group_colours <- c('Acetyl' = '#EA7317', 'Phosphorylation' = '#FFB703', 'Oxidation' = '#5DB7B1', '-' = '#3DA5D9', 'Methylation' = '#2364AA', 'oxPTMs' = '#5A2A82')
+
+# Plot bar chart
+ggplot(df, aes(x = loc, y = abundance_loc, fill = mod_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_fill_manual(values = mod_group_colours, name = 'Key') +
+  labs(x = "Protein localisation",
+       y = "Mean sum of normalised PTM counts") +
+  theme_classic()
+```

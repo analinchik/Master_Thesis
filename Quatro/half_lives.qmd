@@ -1,7 +1,17 @@
 ---
-title: "PTMs and protein half-lives"
-format: html
+title: "PTMs and half-lives"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
 editor: visual
+params:
+  organism: human
 ---
 
 ```{r}
@@ -16,21 +26,26 @@ library(readxl)
 library(kableExtra)
 library(ggpubr)
 library(plotly)
+library(stringr)
 ```
 
 ```{r}
 #| echo: false
 #| include: false
 
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_complete.tsv", header = T, sep = '\t')
+
+leadprot_uniprot <- human_complete %>% dplyr::select(Uniprot_entry_name, LeadProt) %>% distinct()
+
 # This is just a filtered by Post-translational
-human_ptms_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_hl.tsv", header = T, sep = '\t')
-cell_types_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_cell_types.tsv', header = T, sep = '\t')
-long_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_cell_types.tsv', header = T, sep = '\t')
-ageing_proteins <- read_excel( '/Users/anastasialinchik/Desktop/Thesis/DATA/Age-correlated protein.xlsx') %>% filter(Animal == 'Human') %>% dplyr::select(`Uniprot entry`)
-ageing_proteins <- human_ptms_hl %>% filter(LeadProt %in% ageing_proteins$`Uniprot entry`)
-oxPTMs <- read.table(file = '/Users/anastasialinchik/Desktop/Thesis/Master_thesis/oxPTMs_unimod.txt', header = T) 
-hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/hl.tsv', header = T, sep = '\t')
-genage <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv', header = T)
+human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
+
+oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
+oxPTMs <- oxPTMs %>%
+  mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
+
+genage <- read.csv('/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv', header = T) %>% dplyr::select(uniprot)
+# 295 proteins were mapped
 ```
 
 -   The half-life of a protein is the time it takes for the concentration of a protein to decrease by a half. Protein half-lives can be used as estimates of residence time of proteins in the cell.
@@ -48,109 +63,92 @@ genage <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/genage_hu
     -   CC_Results: Results for Cricoid Cartilage (Cartilage in manuscript)
 
 ```{r}
-short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`)
-long_lived_proteins <- # use the code that you already have
-# mouse_proteins_hl <- 
+#| echo: false
+short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`) %>% rename(LeadProt = `Uniprot ID`, mean_hl_hours = `Half-life`)
+
+long_lived_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_grouped.tsv', sep = '\t', header = T)
 ```
 
 # Proteins with a short half-life
+
+Proteins can have varying half-lives
+
+-   What do the half-lives depend on?
+
+-   How are they measured?
 
 Below is a comparison of the distribution of the half-lives that was found in literature and the distribution of a subset of those half-lives in the proteins found in the dataset.
 
 ```{r}
 #| echo: false
 
+human_ptms_hl_short <- inner_join(human_ptms, short_lived_proteins_hl, by = join_by(LeadProt))
+# How many unique proteins?
+#dim(human_ptms_hl_short %>% distinct(LeadProt))
+
 ggplot() +
-  geom_density(data = hl, aes(x = mean_hl_hours, fill = 'Half-lives in papers'), alpha = 0.7, bw = 0.4) +
-  geom_density(data = human_ptms_hl, aes(x = mean_hl_hours, weight = total_counts, fill = 'Proteins in the dataset'), alpha = 0.7, bw = 0.4) + 
-  labs(title = 'Distributions of protein half-lives', x = 'Mean half-lives (hours)', y = 'Density') +
+  geom_density(data = short_lived_proteins_hl, aes(x = mean_hl_hours, fill = 'Short-lived proteins (literature)'), alpha = 0.7, bw = 0.6) +
+  geom_density(data = df, aes(x = mean_hl_hours, weight = norm_counts, fill = 'Short-lived proteins (dataset)'), alpha = 0.7, bw = 0.6) + 
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
   theme_classic() +
-  scale_fill_manual(values = c("#5DB7B1", '#FB8500'))  # Manually specify fill colors
-```
-
--   There is an enrichment of proteins with short half-lives and proteins with half-lives just below 10 hours.
-
-The weighted mean half-life of proteins in the dataset is 8.37 hours, which is within the expected range when compared to values found in [literature](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3788602/).
-
-```{r}
-#| echo: false
-#| include: false
-
-w_mean <- weighted.mean(human_ptms_hl$mean_hl_hours, human_ptms_hl$norm_counts)
-w_mean
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500'),breaks = c('Short-lived proteins (literature)', 'Short-lived proteins (dataset)') ,name = 'Key') +
+  theme(legend.position = "none")
 ```
 
 Though the mean half-life of these proteins is higher than the mean half-life of the whole dataset, none of the outlier proteins can be classified as long-lived proteins. Proteins can be classified as long-lived when their mean half-life exceeds 48 hours ([ref](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5500981/#:~:text=Many%20of%20your%20body's%20proteins,%2Dlived%20protein%20(LLP).)), though this is an arbitrary definition.
 
-This is with the alternative half-lives:
-
-```{r}
-
-long_proteins_hl_df <- long_proteins_hl %>% filter(mean_hl_hours < 200)
-
-ggplot() +
-  geom_density(data = hl, aes(x = mean_hl_hours, fill = 'Half-lives in papers'), alpha = 0.7, bw = 0.4) +
-  geom_density(data = long_proteins_hl_df, aes(x = mean_hl_hours, fill = 'Proteins in the dataset'), alpha = 0.7, bw = 0.4) + 
-  labs(title = 'Distributions of protein half-lives', x = 'Mean half-lives (hours)', y = 'Density') +
-  theme_classic() +
-  scale_fill_manual(values = c("#5DB7B1", '#FB8500'))  # Manually specify fill colors
-```
-
-Both hl dataframes complement each other
-
-```{r}
-hl_and_long <- rbind(hl, long_proteins_hl) %>% group_by(LeadProt) %>% 
-  summarise(mean_hl_hours = mean(mean_hl_hours))
-
-human_ptms_hl <- inner_join(human_ptms, hl_and_long, by = join_by(LeadProt == LeadProt)) %>% filter(mean_hl_hours < 200)
-
-ggplot() +
-  geom_density(data = hl_and_long, aes(x = mean_hl_hours, fill = 'Half-lives in papers'), alpha = 0.7, bw = 8) +
-  geom_density(data = df, aes(x = mean_hl_hours, fill = 'Proteins in the dataset'), alpha = 0.7, bw = 8) + 
-  labs(title = 'Distributions of protein half-lives', x = 'Mean half-lives (hours)', y = 'Density') +
-  theme_classic() +
-  scale_fill_manual(values = c("#5DB7B1", '#FB8500'))  # Manually specify fill colors
-```
-
-Now it looks like a proper subset.
-
-Nonetheless, the change in PTM abundances can still be investigated.
+The enriched proteins in the peak. These are proteins with half-lives 20-25 hours:
 
 ```{r}
 #| echo: false
-#| include: false
-
-# Violin plot for oxPTMs
-human_ptms_oxPTMs <- human_ptms_hl %>% filter(unimod_id %in% oxPTMs$ID)
-
-ggplot(human_ptms_oxPTMs, aes(x = '', y = mean_hl_hours, weight = norm_counts)) +
-  geom_violin(bw=0.5, fill = '#73BFB8') +
-  labs(x = 'oxPTMs', y = 'Half-life (hours)', title = 'Distribution of protein half-lives separated by PTMs') +
-  geom_abline(intercept = 2.3, slope = 0, colour = 'red') +
-  theme_classic(base_size = 12)
+enriched <- df %>% filter(mean_hl_hours < 25 & mean_hl_hours > 20)
+enriched
+#write.table(enriched, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/enriched.tsv', row.names = F, sep="\t", quote = F)
 ```
-
--   A similar distribution is seen as before. Two peaks can be clearly seen here. It would be interesting to look at the difference between the proteins present in the two peaks. The red line is used to split the proteins into two groups.
--   Is the small peak due to the distribution of the half-lives found in various papers? This can be checked using the plot below.
--   The plot below has only one peak, meaning that small peak previously seen in the violin plot is not due to the distribution of the original half-lives.
-
-Below are the proteins that are present in the first peak in the violin plot.
 
 ```{r}
-#| echo: false
-#| eval: true
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
 
-short_hl_proteins <- human_ptms_hl %>% filter(mean_hl_hours < 2.3) %>% dplyr::select(LeadProt) %>%
-  distinct()
-
-kable(short_hl_proteins)
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = 'Sum of the normalised counts', y = 'UniProt identifiers') +
+  theme_classic()
 ```
 
-Approach:
+```{r}
+ggplot(enriched, aes(x = Uniprot_entry_name, y = , weight = norm_counts)) +
+  geom_col()
+```
 
--   Get a list of PTMs that correlate with ageing such as oxPTMs, acetylation etc.
+The proteins in that section are transcription factors. This was done according to the DAVID (UNIPROT_ACCESSION).
 
--   Test whether the abundance of these PTMs changes between the long-lived proteins and the normal proteins.
+## PTMs
+
+Using genes from GenAge is ligit. Can continue doing that.
+
+[Prediction and characterization of human ageing-related proteins by using machine learning \| Scientific Reports (nature.com)](https://www.nature.com/articles/s41598-018-22240-w#Tab2)
+
+PTMs of interest:
+
+-   PTMs that control autophagy
+
+    -   phosphorylation
+
+    -   ubiquitination -\> need to use the new dataset
+
+    -   acetylation
+
+-   oxPTMs
+
+    -   you have a list of these
+
+-   Methylation eg of histones
+
+-   Acylation -\> need to get this from the paper.
 
 ### Phosphorylation
 
@@ -159,39 +157,182 @@ Approach:
 Splitting the dataset in a group with phosphorylation proteins and another group with all remaining proteins.
 
 ```{r}
-human_ptms_hl_mod_group <- human_ptms_hl
-human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl$unimod_id == 21, 'Phospho', 'Non-Phospho')
+#| echo: false
 
-
+human_ptms_hl_mod_group <- human_ptms_hl_short
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_short$unimod_id == 21, 'Phospho', 'Non-Phospho')
+#human_ptms_hl_mod_group <- human_ptms_hl_mod_group %>% filter(! Uniprot_entry_name == 'SRRM2_HUMAN')
 ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
-  geom_density(alpha = 0.6, bw = 2) + 
-  labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+  geom_density(alpha = 0.7, bw = 1) + 
+  labs(x = 'Mean half-life (hours)', y = 'Density')+
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500')) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r}
+df1 <- human_ptms_hl_mod_group %>% filter(mod_group == 'Phospho')
+df2 <- human_ptms_hl_mod_group %>% filter(mod_group == 'Non-Phospho')
+
+ks.test(df1$mean_hl_hours, df2$mean_hl_hours)
+```
+
+```{r}
+unique_df1 <- setdiff(df1$Uniprot_entry_name, df2$Uniprot_entry_name)
+
+# List proteins unique to df2 = not phosphorylated
+unique_df2 <- setdiff(df2$Uniprot_entry_name, df1$Uniprot_entry_name)
+
+# Compare common proteins
+common_proteins <- intersect(df1$Uniprot_entry_name, df2$Uniprot_entry_name)
+common_data <- merge(df1[df1$Uniprot_entry_name %in% common_proteins, ], df2[df2$Uniprot_entry_name %in% common_proteins, ], by = "Uniprot_entry_name", suffixes = c(".A", ".B"))
+```
+
+This is for a summed normal count for each protein. -\> this seems to be the same as before.
+
+```{r}
+df <- human_ptms_hl_mod_group %>% group_by(LeadProt) %>%
+  summarise(mean_hl_hours, mod_group, sum_norm_counts = sum(norm_counts))
+
+ggplot(df, aes(x = mean_hl_hours, weight = sum_norm_counts, fill = mod_group)) +
+  geom_density(alpha = 0.7, bw = 2) + 
+  labs(x = 'Mean half-life (hours)', y = 'Counts')+
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500')) +
+  theme_classic() 
+```
+
+What are the phosphorylated proteins in that peak?
+
+```{r}
+#| echo: false
+enriched <- human_ptms_hl_mod_group %>% filter(mod_group == 'Phospho') %>% filter(mean_hl_hours > 20 & mean_hl_hours < 25)
+```
+
+```{r}
+human_ptms_hl_mod_group %>% filter(Uniprot_entry_name == 'SRRM2_HUMAN') %>%
+  ggplot(aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
+  geom_bar(alpha = 0.7, bw = 1) + 
+  labs(x = 'Mean half-life (hours)', y = 'Density')+
+  scale_fill_manual(values = c('Non-Phospho' = "#5DB7B1", 'Phospho' = '#FB8500')) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r}
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
   theme_classic()
 ```
 
-Distribution of phosphorylated ageing proteins vs phosphorylated non-ageing proteins vs non-phosphorylated proteins
+```{r}
+df <- enriched %>% filter(Uniprot_entry_name == 'SRRM2_HUMAN')
+ggplot(df, aes(x = ptm_loc)) +
+  geom_histogram(stat = 'count') +
+  theme_classic()
+```
+
+What are the most common modifications in this protein?
 
 ```{r}
-pho_age_prot <- ageing_proteins %>% 
-  filter(unimod_id == 21) 
+df <- human_ptms_hl_short %>% filter(Uniprot_entry_name == 'SRRM2_HUMAN') %>%
+  group_by(ptm_name) %>%
+  summarise(sum_total_counts = sum(total_counts)) %>% arrange(desc(sum_total_counts))
 
-pho_age_prot <- human_ptms_hl %>% 
-  filter(unimod_id == 21) %>%
-  filter(Uniprot_entry_name %in% genage$uniprot)
+ggplot(df[1:10,], aes(x = reorder(ptm_name, sum_total_counts), y = sum_total_counts)) +
+  geom_col() +
+  coord_flip() +
+  theme_classic()
+```
 
-pho_no_age_prot <- human_ptms_hl %>% filter(unimod_id == 21) %>%
-  filter(!LeadProt %in% pho_age_prot$LeadProt)
+```{r}
 
-no_pho_prot <-  human_ptms_hl %>% filter(!unimod_id == 21) %>%
-  filter(!LeadProt %in% pho_age_prot$LeadProt)
+```
+
+### GenAge
+
+Got the list of genes that are associated with ageing from GenAge
+
+```{r}
+#| echo: false
+
+genage_in_human_ptms <- human_ptms %>% filter(Uniprot_entry_name %in% genage$uniprot) %>% distinct(Uniprot_entry_name)
+
+human_ptms_hl_short_ageing <- human_ptms_hl_short %>% filter(Uniprot_entry_name %in% genage$uniprot) 
+
+#%>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+```
+
+Distribution of phosphorylated ageing proteins vs phosphorylated non-ageing proteins vs non-phosphorylated proteins vs non-phosphorylated ageing proteins.
+
+```{r}
+#| echo: false
+pho_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(unimod_id == 21) %>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+
+no_pho_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(!unimod_id == 21) %>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+
+pho_no_age_prot <- human_ptms_hl_short %>% filter(unimod_id == 21) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)%>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+
+no_pho_no_age_prot <-  human_ptms_hl_short %>% filter(!unimod_id == 21) %>%
+  filter(!Uniprot_entry_name %in% pho_age_prot$LeadProt) %>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
 
 ggplot() +
-  geom_density(data = no_pho_prot, aes(x = mean_hl_hours, fill = 'no_pho_prot'), alpha = 0.7, bw = 2) +
-  geom_density(data = pho_no_age_prot, aes(x = mean_hl_hours, fill = 'pho_no_age_prot'), alpha = 0.7, bw = 2) +
-   geom_density(data = pho_age_prot, aes(x = mean_hl_hours, fill = 'pho_age_prot'), alpha = 0.7, bw = 2) +
-  labs(title = 'Distributions of protein half-lives', x = 'Mean half-lives (hours)', y = 'Density') +
+  geom_density(data = no_pho_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_pho_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = pho_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts,fill = 'pho_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_pho_age_prot, aes(x = mean_hl_hours, weight = norm_counts,fill = 'no_pho_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = pho_age_prot, aes(x = mean_hl_hours, weight = norm_counts,fill = 'pho_age_prot'), alpha = 0.7, bw = 2) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
   theme_classic() +
-  scale_fill_manual(values = c('no_pho_prot' = '#FB8500', 'pho_no_age_prot' = '#2364AA','pho_age_prot'  = "#5DB7B1"), name = 'Legend', breaks = c('no_pho_prot', 'pho_no_age_prot','pho_age_prot' ))  # Manually specify fill colors
+  scale_fill_manual(values = c('no_pho_no_age_prot' = '#EA7317', 'pho_no_age_prot' = '#FFB703','no_pho_age_prot'  = "#5DB7B1",'pho_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_pho_no_age_prot', 'pho_no_age_prot','no_pho_age_prot','pho_age_prot' ))  # Manually specify fill colors
+```
+
+```{r}
+ggplot() +
+  geom_bar(data = no_pho_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'Non-Phospho'), position = 'jitter') + 
+  geom_bar(data = pho_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'Phospho'), position = 'jitter')+
+  labs(x = 'Mean half-life (hours)', y = 'Density')+
+  scale_fill_manual(values = c('Non-Phospho' = "#5DB7B1", 'Phospho' = '#FB8500')) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+ggplotly()
+```
+
+```{r}
+enriched <- no_pho_age_prot %>% filter(mean_hl_hours > 15 & mean_hl_hours < 25)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:5,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+```{r}
+enriched <- pho_age_prot %>% filter(mean_hl_hours > 15 & mean_hl_hours < 25)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:5,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
 ```
 
 ### Methylation
@@ -199,25 +340,167 @@ ggplot() +
 -   Filtered by the \[34\]Methyl modification
 
 ```{r}
-human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl$unimod_id == 34, 'Methyl', 'Non-Methyl')
+human_ptms_hl_mod_group <- human_ptms_hl_short %>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 34, 'Meth', 'Non-Meth')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-Meth", "Meth"))
 
 ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
-  geom_density(alpha = 0.6, bw = 0.4) + 
-  labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+  geom_density(alpha = 0.7, bw = 2) + 
+  labs(x = 'Mean half-life (hours)', y = 'Counts')+
+  scale_fill_manual(values = c('Non-Meth' = "#5DB7B1", 'Meth' = '#FB8500')) +
+  theme_classic() 
+```
+
+Need to check:
+
+-   which proteins do not get methylated with half-lives between 20 and 25
+
+    -   need to check the difference between the two sets
+
+-   need to check the enrichment between 10 and 20
+
+The proteins enriched with half-lives between 10 and 20 hours.
+
+```{r}
+enriched <- human_ptms_hl_mod_group %>% filter(mod_group == 'Meth') %>% filter(mean_hl_hours > 10 & mean_hl_hours < 20)
+
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+Those with half-lives between 0 and 10 hours.
+
+```{r}
+enriched <- human_ptms_hl_mod_group %>% filter(mod_group == 'Meth') %>% filter(mean_hl_hours > 0 & mean_hl_hours < 10)
+
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+Looking at the ageing vs non-ageing proteins now.
+
+```{r}
+#| echo: false
+
+meth_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(unimod_id == 34) %>% filter(!Uniprot_entry_name == 'SSRM2_HUMAN')
+
+no_meth_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(!unimod_id == 34) %>% filter(!Uniprot_entry_name == 'SSRM2_HUMAN')
+
+meth_no_age_prot <- human_ptms_hl_short %>% filter(unimod_id == 34) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot) %>% filter(!Uniprot_entry_name == 'SSRM2_HUMAN')
+
+no_meth_no_age_prot <-  human_ptms_hl_short %>% filter(!unimod_id == 34) %>%
+  filter(!Uniprot_entry_name %in% meth_age_prot$LeadProt) %>% filter(!Uniprot_entry_name == 'SSRM2_HUMAN')
+
+ggplot() +
+  geom_density(data = no_meth_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_meth_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = meth_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'meth_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_meth_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_meth_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = meth_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'meth_age_prot'), alpha = 0.7, bw = 2) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_meth_no_age_prot' = '#EA7317', 'meth_no_age_prot' = '#FFB703','no_meth_age_prot'  = "#5DB7B1",'meth_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_meth_no_age_prot', 'meth_no_age_prot','no_meth_age_prot','meth_age_prot' ))  # Manually specify fill colors
+```
+
+```{r}
+enriched <- meth_age_prot %>% filter(mean_hl_hours > 15 & mean_hl_hours < 22)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
   theme_classic()
 ```
 
 ### Acetylation
 
--   Filtered by the \[1\]Acetyl modification
+-   Filtered by the \[1\]Acetyl modification.
+
+```{r}
+human_ptms_hl_mod_group <- human_ptms_hl_short %>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 1, 'Acetyl', 'Non-Acetyl')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-Acetyl", "Acetyl"))
+
+ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
+  geom_density(alpha = 0.7, bw = 2) + 
+  labs(x = 'Mean half-life (hours)', y = 'Counts')+
+  scale_fill_manual(values = c('Non-Acetyl' = "#5DB7B1", 'Acetyl' = '#FB8500')) +
+  theme_classic() 
+```
+
+```{r}
+enriched <- human_ptms_hl_mod_group %>% filter(mod_group == 'Acetyl') %>% filter(mean_hl_hours > 15 & mean_hl_hours < 25)
+
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+Now looking at the ageing vs no-ageing comparison:
 
 ```{r}
 #| echo: false
-human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl$unimod_id == 1, 'Acetyl', 'Non-Acetyl')
+acetyl_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(unimod_id == 1) 
 
-ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
-  geom_density(alpha = 0.6, bw = 0.4) + 
-  labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+no_acetyl_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(!unimod_id == 1) 
+
+acetyl_no_age_prot <- human_ptms_hl_short %>% filter(unimod_id == 1) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)
+
+no_acetyl_no_age_prot <-  human_ptms_hl_short %>% filter(!unimod_id == 1) %>%
+  filter(!Uniprot_entry_name %in% acetyl_age_prot$LeadProt)
+
+ggplot() +
+  geom_density(data = no_acetyl_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_acetyl_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = acetyl_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'acetyl_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_acetyl_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_acetyl_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = acetyl_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'acetyl_age_prot'), alpha = 0.7, bw = 2) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_acetyl_no_age_prot' = '#EA7317', 'acetyl_no_age_prot' = '#FFB703','no_acetyl_age_prot'  = "#5DB7B1",'acetyl_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_acetyl_no_age_prot', 'acetyl_no_age_prot','no_acetyl_age_prot','acetyl_age_prot' ))  # Manually specify fill colors
+```
+
+```{r}
+enriched <- no_acetyl_age_prot %>% filter(mean_hl_hours > 0 & mean_hl_hours < 7)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
   theme_classic()
 ```
 
@@ -226,219 +509,691 @@ ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fil
 -   Only modification: \[35\]Oxidation
 
 ```{r}
-#| echo: false
+human_ptms_hl_mod_group <- human_ptms_hl_short 
+#%>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 1, 'Oxi', 'Non-Oxi')
 
-human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl$unimod_id == 35, 'Oxidation', 'Non-Oxidation')
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-Oxi", "Oxi"))
 
 ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
-  geom_density(alpha = 0.6, bw = 0.4) + 
-  labs(title = 'Distribution of half lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+  geom_density(alpha = 0.7, bw = 2) + 
+  labs(x = 'Mean half-life (hours)', y = 'Counts')+
+  scale_fill_manual(values = c('Non-Oxi' = "#5DB7B1", 'Oxi' = '#FB8500')) +
+  theme_classic() 
+```
+
+```{r}
+enriched <- human_ptms_hl_mod_group %>% filter(mod_group == 'Oxi') %>% filter(mean_hl_hours > 15 & mean_hl_hours < 25)
+
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+```{r}
+enriched <- human_ptms_hl_mod_group %>% filter(mod_group == 'Oxi') %>% filter(mean_hl_hours > 25 & mean_hl_hours < 35)
+
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+```{r}
+#| echo: false
+
+oxi_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(unimod_id == 35) 
+
+no_oxi_age_prot <- human_ptms_hl_short_ageing %>% 
+  filter(!unimod_id == 35) 
+
+oxi_no_age_prot <- human_ptms_hl_short %>% filter(unimod_id == 35) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)
+
+no_oxi_no_age_prot <-  human_ptms_hl_short %>% filter(!unimod_id == 35) %>%
+  filter(!Uniprot_entry_name %in% oxi_age_prot$LeadProt)
+
+ggplot() +
+  geom_density(data = no_oxi_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxi_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = oxi_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxi_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_oxi_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxi_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = oxi_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxi_age_prot'), alpha = 0.7, bw = 2) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_oxi_no_age_prot' = '#EA7317', 'oxi_no_age_prot' = '#FFB703','no_oxi_age_prot'  = "#5DB7B1",'oxi_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_oxi_no_age_prot', 'oxi_no_age_prot','no_oxi_age_prot','oxi_age_prot' ))  # Manually specify fill colors
+```
+
+```{r}
+enriched <- no_oxi_age_prot %>% filter(mean_hl_hours > 10 & mean_hl_hours < 25)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+```{r}
+enriched <- oxi_age_prot %>% filter(mean_hl_hours > 15 & mean_hl_hours < 25)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+```{r}
+enriched <- oxi_age_prot %>% filter(mean_hl_hours > 0 & mean_hl_hours < 5)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
   theme_classic()
 ```
 
 ### oxPTMs
 
-All PTMs related to oxidative damage in general, not only \[35\]Oxidation.
+This is only for proteins that are related to ageing.
+
+All PTMs related to oxidative damage in general, not only oxidation.
 
 ```{r}
-#| echo: false
-human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl$unimod_id %in% oxPTMs$ID, 'oxPTMs', 'Non-oxPTMs')
+human_complete_hl_short <- inner_join(human_complete, short_lived_proteins_hl, by = join_by(LeadProt))
+
+human_complete_hl_short_ageing <- human_complete_hl_short %>% filter(Uniprot_entry_name %in% genage$uniprot)
+```
+
+```{r}
+human_ptms_hl_mod_group <- human_complete_hl_short 
+#%>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% oxPTMs$unimod_id & human_ptms_hl_mod_group$ptm_res %in% oxPTMs$AAs_list), 'oxPTMs', 'Non-oxPTMs')
+
+human_ptms_hl_mod_group <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-oxPTMs' & ptm_class == 'Post-translational') | mod_group == 'oxPTMs')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-oxPTMs", "oxPTMs"))
 
 ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
-  geom_density(alpha = 0.5, bw = 0.4) +
-  labs(title = 'Distribution of half-lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+  geom_density(alpha = 0.7, bw = 2) + 
+  labs(x = 'Mean half-life (hours)', y = 'Counts')+
+  scale_fill_manual(values = c('Non-oxPTMs' = "#5DB7B1", 'oxPTMs' = '#FB8500')) +
+  theme_classic() 
+```
+
+```{r}
+enriched <- human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs') %>% filter(mean_hl_hours > 0 & mean_hl_hours < 10)
+
+df <- enriched %>%
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
   theme_classic()
 ```
 
 ```{r}
 #| echo: false
+oxPTMs_age_prot <- human_complete_hl_short_ageing %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) 
 
-df <- human_ptms_hl_mod_group %>% dplyr::select(LeadProt, modification, mod_group, unimod_id, mean_hl_hours) %>%
-  distinct()
+no_oxPTMs_age_prot <- human_complete_hl_short_ageing %>% 
+  filter(!unimod_id %in% oxPTMs$ID) %>% filter(ptm_class == 'Post-translational')
 
-ggplot(df, aes(x = mod_group, y = mean_hl_hours)) +
-  geom_violin(bw=0.4, fill = '#73BFB8') +
-  geom_boxplot(width=0.3, outlier.shape = NA) + 
-  labs(x = 'PTM name', y = 'Half-life (hours)', title = 'Distribution of protein half-lives separated by PTMs') +
-  stat_summary(fun=mean, geom="point", shape=19, size=2.5, colour = '#EA7317') +
-  theme_classic(base_size = 12)
+oxPTMs_no_age_prot <- human_complete_hl_short %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)
+
+no_oxPTMs_no_age_prot <-  human_complete_hl_short %>% filter(!unimod_id %in% oxPTMs$ID) %>%
+  filter(!Uniprot_entry_name %in% oxPTMs_age_prot$LeadProt) %>% filter(ptm_class == 'Post-translational')
+
+ggplot() +
+  geom_density(data = no_oxPTMs_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxPTMs_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = oxPTMs_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxPTMs_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_oxPTMs_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxPTMs_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = oxPTMs_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxPTMs_age_prot'), alpha = 0.7, bw = 2) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_oxPTMs_no_age_prot' = '#EA7317', 'oxPTMs_no_age_prot' = '#FFB703','no_oxPTMs_age_prot'  = "#5DB7B1",'oxPTMs_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_oxPTMs_no_age_prot', 'oxPTMs_no_age_prot','no_oxPTMs_age_prot','oxPTMs_age_prot' ))  # Manually specify fill colors
+```
+
+```{r}
+enriched <- oxPTMs_age_prot %>% filter(mean_hl_hours > 15 & mean_hl_hours < 25)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+```{r}
+enriched <- oxPTMs_age_prot %>% filter(mean_hl_hours > 0 & mean_hl_hours < 10)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
+```
+
+```{r}
+enriched <- oxPTMs_no_age_prot %>% filter(mean_hl_hours > 0 & mean_hl_hours < 10)
+
+df <- enriched %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_norm_counts = sum(norm_counts)) %>% 
+  arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:4,], aes(x = reorder(Uniprot_entry_name, sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = 'Sum of the normalised counts', x = 'UniProt identifiers') +
+  theme_classic()
 ```
 
 As can be seen in the above graphs, the presence of the small peak, which represents proteins with very short half-lives, varies depending on the type of modification. It is more prominent in PTMs that are related to ageing.
 
-**Hypothesis**: proteins with higher mean half-lives remain in the cell for longer, therefore they are more susceptible to oxidative damage and will accumulate more oxPTMs.
+## Bar chart
 
-Approach:
-
--   Count the total number of oxPTMs on each protein (using normalised counts)
-
--   Plot the mean half-life of the proteins vs their total oxPTMs count
-
-Below is a plot that shows how the number of oxPTMs changes with the mean half-life of different proteins. The proteins, which were identified to have a very short half-life are shown in blue. A similar pattern is seen between the blue and red points, where some have a very high number of modifications, while most show very low abundances. Most proteins still seem to remain largely unmodified irrespective of their half-life.
+**Hypothesis**: The higher the half-life, the greater the number of PTMs.
 
 ```{r}
 #| echo: false
-#| warning: false
-oxPTMs_hl <- human_ptms_hl %>% 
-  inner_join(oxPTMs, by = join_by(unimod_id == ID)) %>%
-  group_by(LeadProt) %>%
-  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
+df <- human_ptms_hl_short %>%
+  mutate(hl_group = case_when(
+    mean_hl_hours <= 5 ~ "0-5",
+    mean_hl_hours <= 10 ~ "5-10",
+    mean_hl_hours <= 15 ~ "10-15",
+    mean_hl_hours <= 20 ~ "15-20",
+    mean_hl_hours <= 25 ~ "20-25",
+    mean_hl_hours <= 30 ~ "25-30",
+    TRUE ~ "30+"
+  )) %>%
+  mutate(mod_group = case_when(
+    unimod_id == 1 ~'Acetyl', 
+    unimod_id == 35 ~'Oxidation', 
+    unimod_id == 21 ~'Phosphorylation',
+    unimod_id == 34 ~'Methylation',
+    unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list ~ 'oxPTMs',
+    TRUE ~ "-"
+  )) %>% filter(!Uniprot_entry_name == 'SRRM2_HUMAN')
+
+mean_hours_per_hl_group <- df %>%
+  group_by(hl_group, mod_group) %>%
+  summarize(mean_ptms_group = mean(norm_counts)) %>% 
+  filter(!mod_group == '-') %>%
   distinct()
 
-oxPTMs_hl$group <- if_else(oxPTMs_hl$LeadProt %in% short_hl_proteins$LeadProt, 'short hl', 'normal hl') #SHL = short half-life, NHL = normal half-life
-ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs, colour = group)) +
-  geom_point() +
+mod_group_colours <- c('Acetyl' = '#EA7317', 'Phosphorylation' = '#FFB703', 'Oxidation' = '#5DB7B1', '-' = '#3DA5D9', 'Methylation' = '#2364AA', 'oxPTMs' = '#5A2A82')
+
+# Plot bar chart
+ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = mod_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30+")) +
+  scale_fill_manual(values = mod_group_colours, name = 'Key') +
+  labs(x = "Half-lives (hours)",
+       y = "Mean sum of normalised PTM counts") +
   theme_classic()
-
-ggplotly()
 ```
 
-What are the protein in the bottom part?
-
-```{r}
-oxPTMs_hl <- human_ptms_hl %>% 
-  inner_join(oxPTMs, by = join_by(unimod_id == ID)) %>%
-  group_by(LeadProt) %>%
-  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
-  distinct()
-
-unmodified <- oxPTMs_hl %>% filter(sum_oxPTMs <3) %>% dplyr::select(LeadProt)
-
-iupred_scores_ratios <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv', header = T, sep = '\t')
-
-df2 <- iupred_scores_ratios %>% filter(UniProt_ID %in% unmodified$LeadProt)
-
-hist(df2$Ratio_Above_0.5)
-
-df3 <- mt %>% filter(Protein_ID %in% unmodified$LeadProt)
-
-hist(df3$mean_mt)
-```
-
-Colour based on stability
-
-```{r}
-oxPTMs_hl <- human_ptms_hl %>% 
-  inner_join(oxPTMs, by = join_by(unimod_id == ID)) %>%
-  group_by(LeadProt) %>%
-  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
-  distinct() %>% inner_join(mt, by = join_by(LeadProt == Protein_ID))
-
-oxPTMs_hl$group <- if_else(oxPTMs_hl$mean_mt > 55, '> 55', '< 55') #SHL = short half-life, NHL = normal half-life
-ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs, colour = group)) +
-  geom_point() +
-  theme_classic()
-
-ggplotly()
-```
-
-Now look at the melting temp:
-
-```{r}
-oxPTMs_hl <- human_ptms_hl %>% 
-  inner_join(oxPTMs, by = join_by(unimod_id == ID)) %>%
-  group_by(LeadProt) %>%
-  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
-  distinct() %>% inner_join(iupred_scores_ratios, by = join_by(LeadProt == UniProt_ID))
-
-oxPTMs_hl$group <- if_else(oxPTMs_hl$Ratio_Above_0.5 > 0.5, '>0.5', '<0.5') #SHL = short half-life, NHL = normal half-life
-ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs, colour = group)) +
-  geom_point() +
-  theme_classic()
-
-ggplotly()
-```
-
-## PTMs in long-lived proteins
+# Proteins with a long half-life
 
 Long-lived proteins can be used as estimators of chronological age. Long-lived proteins can be defined in different ways, for example based on the half-life of the protein when compared to the average half-life of proteins in the organism. In this case, long-lived proteins were obtained from the following study: [paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3788602/). Proteins were classified as long-lived based on their degree of degradation during the experiment and therefore it was possible to discover new long-lived proteins (no *a priori* assumptions were made).
 
 The study identified a list of long-lived proteins in rats, therefore human orthologs of these proteins were found.
 
 ```{r}
-#|echo: false
+#| echo: false
+#| warning: false
 
-long_lived_proteins <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/long_lived_proteins.xlsx') %>% subset(select = c(3,4))
-long_lived_proteins <- na.omit(long_lived_proteins)
-long_lived_proteins_hl <- inner_join(human_ptms, long_lived_proteins, by = join_by(LeadProt == LeadProt))
+human_ptms_hl_long <- inner_join(human_ptms, long_lived_proteins_hl, by = join_by(LeadProt))
+# How many unique proteins?
+dim(human_ptms_hl_long %>% distinct(LeadProt))
 
-human_ptms_hl_long_proteins <- rbind(long_lived_proteins_hl, human_ptms_hl)
+ggplot() +
+  geom_density(data = long_lived_proteins_hl, aes(x = mean_hl_hours, fill = 'Long-lived proteins (literature)'), alpha = 0.7, bw = 8) +
+  geom_density(data = human_ptms_hl_long, aes(x = mean_hl_hours, weight = total_counts, fill = 'Long-lived proteins (dataset)'), alpha = 0.7, bw = 8) + 
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,1000)) +
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500'),breaks = c('Long-lived proteins (literature)', 'Long-lived proteins (dataset)') ,name = 'Key') +
+  theme(legend.position = "none")
 
-human_ptms_hl_long_proteins$group <- if_else(human_ptms_hl_long_proteins$LeadProt %in% long_lived_proteins$LeadProt, 'long lived', 'non-long lived')
+df <- human_ptms_hl_long %>% mutate(sum_counts = sum(total_counts))
+
+ggplot() +
+  geom_density(data = long_lived_proteins_hl, aes(x = mean_hl_hours, fill = 'Long-lived proteins (literature)'), alpha = 0.7, bw = 8) +
+  geom_density(data = df, aes(x = mean_hl_hours, weight = sum_counts, fill = 'Long-lived proteins (dataset)'), alpha = 0.7, bw = 8) + 
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,1000)) +
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500'),breaks = c('Long-lived proteins (literature)', 'Long-lived proteins (dataset)') ,name = 'Key') +
+  theme(legend.position = "none")
 ```
 
-Just the long-lived proteins.
+## PTMs
 
-```{r}
-ggplot(long_lived_proteins_hl, aes(x = mean_hl_hours, weight = norm_counts)) +
-  geom_histogram(bins = 50) +
-  labs(title = 'Distribution of half-lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
-  theme_classic()
-```
-
-```{r}
-#|echo: false
-human_ptms_hl_oxi <- long_lived_proteins_hl %>% filter(unimod_id %in% oxPTMs$ID)
-
-ggplot(human_ptms_hl_oxi, aes(x = mean_hl_hours, weight = norm_counts)) +
-  geom_histogram(bins = 50) +
-  labs(title = 'Distribution of half-lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
-  theme_classic()
-```
+### Phosphorylation
 
 ```{r}
 #| echo: false
 #| warning: false
-oxPTMs_hl <- long_lived_proteins_hl %>% 
-  group_by(LeadProt) %>%
-  summarise(mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
-  distinct()
 
-ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs)) +
-  geom_point() +
-  geom_smooth(method = 'lm', se = F)
-  theme_classic()
+human_ptms_hl_mod_group <- human_ptms_hl_long
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_long$unimod_id == 21, 'Phospho', 'Non-Phospho')
 
-ggplotly()
+ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
+  geom_density(alpha = 0.7, bw = 8) + 
+  labs(x = 'Mean half-life (hours)', y = 'Counts')+
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500')) +
+  scale_x_continuous(limits = c(0,750)) +
+  theme_classic() +
+  theme(legend.position = "none")
 ```
 
-look at the 114 protein CO6A3_HUMAN
-
 ```{r}
-human_ptms %>% filter(Uniprot_entry_name == 'CO6A3_HUMAN') %>%
-  group_by(project_id) %>% summarise(counts = sum(norm_counts)) %>% arrange(desc(counts))
-  ggplot(aes(y = counts, x = project_id)) +
-  geom_bar(stats = 'identity')
+#| warning: false
+df <- human_ptms_hl_mod_group %>% group_by(LeadProt) %>%
+  summarise(mean_hl_hours, mod_group, sum_norm_counts = sum(norm_counts))
+
+ggplot(df, aes(x = mean_hl_hours, weight = sum_norm_counts, fill = mod_group)) +
+  geom_density(alpha = 0.7, bw = 2) + 
+  labs(x = 'Mean half-life (hours)', y = 'Counts')+
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500')) +
+  scale_x_continuous(limits = c(0,200)) +
+  theme_classic() 
 ```
 
-### Long-lived proteins + the rest
+```{r}
+#| echo: false
 
-The plot below shows the distribution of the half-lives of proteins with oxPTMs (normalised counts were used). Clearly there is a much greater number of short lived proteins compared to long-lived proteins.
+human_ptms_hl_mod_group <- human_ptms_hl_long
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_long$unimod_id == 21, 'Phospho', 'Non-Phospho')
+
+ggplot(human_ptms_hl_mod_group, aes(x = mean_hl_hours, weight = norm_counts, fill = mod_group)) +
+  geom_density(alpha = 0.7, bw = 17) + 
+  labs(title = 'Distribution of half lives of phosphorylated proteins', x = 'Mean half-life (hours)', y = 'Counts')+
+  theme_classic()
+```
+
+### Methylation
 
 ```{r}
-#|echo: false
-human_ptms_hl_oxi <- human_ptms_hl_long_proteins %>% filter(unimod_id %in% oxPTMs$ID)
+#| echo: false
 
-ggplot(human_ptms_hl_oxi, aes(x = mean_hl_hours, weight = norm_counts)) +
-  geom_histogram(bins = 50) +
-  labs(title = 'Distribution of half-lives of oxidised proteins', x = 'Mean half-life (hours)', y = 'Counts')+
-  theme_classic()
+meth_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(unimod_id == 34) 
+
+no_meth_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(!unimod_id == 34) 
+
+meth_no_age_prot <- human_ptms_hl_long %>% filter(unimod_id == 34) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)
+
+no_meth_no_age_prot <-  human_ptms_hl_long %>% filter(!unimod_id == 34) %>%
+  filter(!Uniprot_entry_name %in% meth_age_prot$LeadProt)
+
+ggplot() +
+  geom_density(data = no_meth_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_meth_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = meth_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'meth_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_meth_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_meth_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = meth_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'meth_age_prot'), alpha = 0.7, bw = 2) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  scale_x_continuous(limits = c(48,200)) +
+  theme_classic() +
+  scale_fill_manual(values = c('no_meth_no_age_prot' = '#EA7317', 'meth_no_age_prot' = '#FFB703','no_meth_age_prot'  = "#5DB7B1",'meth_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_meth_no_age_prot', 'meth_no_age_prot','no_meth_age_prot','meth_age_prot' ))  # Manually specify fill colors
+```
+
+### Acetylation
+
+```{r}
+#| echo: false
+acetyl_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(unimod_id == 1) 
+
+no_acetyl_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(!unimod_id == 1) 
+
+acetyl_no_age_prot <- human_ptms_hl_long %>% filter(unimod_id == 1) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)
+
+no_acetyl_no_age_prot <-  human_ptms_hl_long %>% filter(!unimod_id == 1) %>%
+  filter(!Uniprot_entry_name %in% acetyl_age_prot$LeadProt)
+
+ggplot() +
+  geom_density(data = no_acetyl_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_acetyl_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = acetyl_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'acetyl_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_acetyl_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_acetyl_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = acetyl_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'acetyl_age_prot'), alpha = 0.7, bw = 2) +
+  scale_x_continuous(limits = c(48,200)) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_acetyl_no_age_prot' = '#EA7317', 'acetyl_no_age_prot' = '#FFB703','no_acetyl_age_prot'  = "#5DB7B1",'acetyl_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_acetyl_no_age_prot', 'acetyl_no_age_prot','no_acetyl_age_prot','acetyl_age_prot' ))  # Manually specify fill colors
+```
+
+### Oxidation
+
+```{r}
+#| echo: false
+
+oxi_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(unimod_id == 35) 
+
+no_oxi_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(!unimod_id == 35) 
+
+oxi_no_age_prot <- human_ptms_hl_long %>% filter(unimod_id == 35) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)
+
+no_oxi_no_age_prot <-  human_ptms_hl_long %>% filter(!unimod_id == 35) %>%
+  filter(!Uniprot_entry_name %in% oxi_age_prot$LeadProt)
+
+ggplot() +
+  geom_density(data = no_oxi_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxi_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = oxi_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxi_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_oxi_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxi_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = oxi_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxi_age_prot'), alpha = 0.7, bw = 2) +
+  scale_x_continuous(limits = c(48,200)) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_oxi_no_age_prot' = '#EA7317', 'oxi_no_age_prot' = '#FFB703','no_oxi_age_prot'  = "#5DB7B1",'oxi_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_oxi_no_age_prot', 'oxi_no_age_prot','no_oxi_age_prot','oxi_age_prot' ))  # Manually specify fill colors
 ```
 
 ### oxPTMs
 
-This plot is similar to the one already seen above, however this time, long-lived proteins are included. There is still no correlation between the abundance of PTMs and protein half-lives.
+```{r}
+#| echo: false
+oxPTMs_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(unimod_id %in% oxPTMs$ID) 
+
+no_oxPTMs_age_prot <- human_ptms_hl_long_ageing %>% 
+  filter(!unimod_id %in% oxPTMs$ID) 
+
+oxPTMs_no_age_prot <- human_ptms_hl_long %>% filter(unimod_id %in% oxPTMs$ID) %>%
+  filter(!Uniprot_entry_name %in% genage$uniprot)
+
+no_oxPTMs_no_age_prot <-  human_ptms_hl_long %>% filter(!unimod_id %in% oxPTMs$ID) %>%
+  filter(!Uniprot_entry_name %in% oxPTMs_age_prot$LeadProt)
+
+ggplot() +
+  geom_density(data = no_oxPTMs_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxPTMs_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = oxPTMs_no_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxPTMs_no_age_prot'), alpha = 0.7, bw = 2) +
+  geom_density(data = no_oxPTMs_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'no_oxPTMs_age_prot'), alpha = 0.7, bw = 2) +
+   geom_density(data = oxPTMs_age_prot, aes(x = mean_hl_hours, weight = norm_counts, fill = 'oxPTMs_age_prot'), alpha = 0.7, bw = 2) +
+  scale_x_continuous(limits = c(48,200)) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c('no_oxPTMs_no_age_prot' = '#EA7317', 'oxPTMs_no_age_prot' = '#FFB703','no_oxPTMs_age_prot'  = "#5DB7B1",'oxPTMs_age_prot' = '#3DA5D9'), name = 'Legend', breaks = c('no_oxPTMs_no_age_prot', 'oxPTMs_no_age_prot','no_oxPTMs_age_prot','oxPTMs_age_prot' ))  # Manually specify fill colors
+```
+
+## Bar chart 
+
+# B cells
+
+```{r}
+#| echo: false
+Bcells_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/Bcells_hl.tsv', header = T, sep = '\t')
+```
+
+cytoplasmic projects:
+
+-   old B cells: PXD006570
+
+-   young B cells:PXD006572
+
+nuclear proteins:
+
+-   old B cells:PXD006571
+
+-   young B cells:PXD006576
+
+```{r}
+#| echo: false
+
+human_ptms_cyto_old_hl <- human_ptms %>% filter(project_id == 'PXD006570') %>%
+  inner_join(Bcells_hl, by = join_by(LeadProt))
+human_ptms_cyto_young_hl <- human_ptms %>% filter(project_id == 'PXD006572') %>%
+  inner_join(Bcells_hl, by = join_by(LeadProt))
+
+human_ptms_nuc_old_hl <- human_ptms %>% filter(project_id == 'PXD006571') %>%
+  inner_join(Bcells_hl, by = join_by(LeadProt))
+human_ptms_nuc_young_hl <- human_ptms %>% filter(project_id == 'PXD006576') %>%
+  inner_join(Bcells_hl, by = join_by(LeadProt))
+```
+
+## Distribution of the half-lives
+
+Take the cytoplasmic proteins and plot 2 density plots. Compare the distributions of the half-lives between the
 
 ```{r}
 #| echo: false
 #| warning: false
-oxPTMs_hl <- human_ptms_hl_oxi %>%
-  group_by(LeadProt) %>%
-  summarise(group, mean_hl_hours, sum_oxPTMs = sum(norm_counts)) %>%
-  distinct()
 
+ggplot() +
+  geom_density(data = human_ptms_cyto_old_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_old'), alpha = 0.7, bw = 4) +
+  geom_density(data = human_ptms_cyto_young_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_young'), alpha = 0.7, bw = 4) +
+  geom_density(data = human_ptms_nuc_old_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_old'), alpha = 0.7, bw = 4) +
+  geom_density(data = human_ptms_nuc_young_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_young'), alpha = 0.7, bw = 4) +
+  scale_x_continuous(limits = c(0,200)) +
+  scale_fill_manual(values = c('cyto_old' = '#EA7317', 'cyto_young' = '#FFB703','nuc_old'  = "#5DB7B1",'nuc_young' = '#3DA5D9'), name = 'Legend') +
+  theme_classic()
+```
 
-ggplot(oxPTMs_hl, aes(x = mean_hl_hours, y = sum_oxPTMs, colour = group)) +
-  geom_point() +
+## PTMs
+
+### Phosphorylation
+
+For cytoplasmic proteins what are the differences between old and young proteins?
+
+```{r}
+
+human_ptms_cyto_old_hl_pho <- human_ptms_cyto_old_hl %>% filter(unimod_id == 21) 
+human_ptms_cyto_old_hl_no_pho <- human_ptms_cyto_old_hl %>% filter(!unimod_id == 21) 
+human_ptms_cyto_young_hl_no_pho <- human_ptms_cyto_young_hl %>% filter(!unimod_id == 21) 
+human_ptms_cyto_young_hl_pho <- human_ptms_cyto_young_hl %>% filter(unimod_id == 21) 
+
+human_ptms_nuc_old_hl_pho <- human_ptms_nuc_old_hl %>% filter(unimod_id == 21) 
+human_ptms_nuc_old_hl_no_pho <- human_ptms_nuc_old_hl %>% filter(!unimod_id == 21) 
+human_ptms_nuc_young_hl_pho <-  human_ptms_nuc_young_hl %>% filter(unimod_id == 21) 
+human_ptms_nuc_young_hl_no_pho <-  human_ptms_nuc_young_hl %>% filter(!unimod_id == 21) 
+
+ggplot() +
+  geom_density(data = human_ptms_cyto_old_hl_pho, aes(x = mean_hl_hours, weight = norm_counts, fill = 'human_ptms_cyto_old_hl_pho'), alpha = 0.7, bw = 2) +
+  geom_density(data = human_ptms_cyto_old_hl_no_pho, aes(x = mean_hl_hours, weight = norm_counts,fill = 'human_ptms_cyto_old_hl_no_pho'), alpha = 0.7, bw = 2) +
+  geom_density(data = human_ptms_cyto_young_hl_no_pho, aes(x = mean_hl_hours, weight = norm_counts,fill = 'human_ptms_cyto_young_hl_no_pho'), alpha = 0.7, bw = 2) +
+   geom_density(data = human_ptms_cyto_young_hl_pho, aes(x = mean_hl_hours, weight = norm_counts,fill = 'human_ptms_cyto_young_hl_pho'), alpha = 0.7, bw = 2) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  scale_x_continuous(limits = c(0,100)) +
+  theme_classic() +
+  scale_fill_manual(values = c('human_ptms_cyto_old_hl_pho' = '#EA7317', 'human_ptms_cyto_old_hl_no_pho' = '#FFB703','human_ptms_cyto_young_hl_no_pho'  = "#5DB7B1",'human_ptms_cyto_young_hl_pho' = '#3DA5D9'), name = 'Legend')  # Manually specify fill colors
+```
+
+### Methylation
+
+### Acetylation
+
+### Oxidation
+
+### oxPTMs
+
+```{r}
+
+```
+
+Approach:
+
+-   Get a list of PTMs that correlate with ageing such as oxPTMs, acetylation etc.
+
+-   Test whether the abundance of these PTMs changes between the long-lived proteins and the normal proteins.
+
+### Bar chart
+
+Is there less phosphorylation in young cells compared to old cells?
+
+```{r}
+#| echo: false
+
+df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'old')
+df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'young')
+df <- rbind(df_1, df_2)
+df <- df %>%
+  mutate(hl_group = case_when(
+    mean_hl_hours <= 50 ~ "0-50",
+    mean_hl_hours <= 100 ~ "50-100",
+    mean_hl_hours <= 150 ~ "100-150",
+    mean_hl_hours <= 200 ~ "150-200",
+    mean_hl_hours <= 250 ~ "200-250",
+    TRUE ~ "250+"
+  )) 
+
+mean_hours_per_hl_group <- df %>%
+  group_by(hl_group, age_group) %>%
+  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
+
+mod_group_colours <- c('young' = '#EA7317', 'old' = '#5DB7B1')
+# Plot bar chart
+ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
+  scale_fill_manual(values = mod_group_colours, name = 'Key') +
+  labs(x = "Half-lives (hours)",
+       y = "Mean sum of normalised PTM counts") +
+  theme_classic()
+```
+
+Acetylation
+
+```{r}
+df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'nuc_old') %>% filter(unimod_id == 1)
+df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'nuc_young') %>% filter(unimod_id == 1)
+df_3 <- human_ptms_cyto_old_hl %>% mutate(age_group = 'cyto_old') %>% filter(unimod_id == 1)
+df_4 <- human_ptms_cyto_young_hl %>% mutate(age_group = 'cyto_young') %>% filter(unimod_id == 1)
+
+df <- rbind(df_1, df_2, df_3, df_4)
+df <- df %>%
+  mutate(hl_group = case_when(
+    mean_hl_hours <= 50 ~ "0-50",
+    mean_hl_hours <= 100 ~ "50-100",
+    mean_hl_hours <= 150 ~ "100-150",
+    mean_hl_hours <= 200 ~ "150-200",
+    mean_hl_hours <= 250 ~ "200-250",
+    TRUE ~ "250+"
+  )) 
+
+mean_hours_per_hl_group <- df %>%
+  group_by(hl_group, age_group) %>%
+  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
+
+mod_group_colours <- c('nuc_old' = '#EA7317', 'cyto_old' = '#2364AA', 'nuc_young' = '#F9AE8B', 'cyto_young' = '#219EBC')
+# Plot bar chart
+ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
+  scale_fill_manual(values = mod_group_colours, name = 'Key') +
+  labs(x = "Half-lives (hours)",
+       y = "Mean sum of normalised PTM counts") +
+  theme_classic()
+```
+
+Phosphorylation
+
+```{r}
+df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'nuc_old') %>% filter(unimod_id == 21)
+df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'nuc_young') %>% filter(unimod_id == 21)
+df_3 <- human_ptms_cyto_old_hl %>% mutate(age_group = 'cyto_old') %>% filter(unimod_id == 21)
+df_4 <- human_ptms_cyto_young_hl %>% mutate(age_group = 'cyto_young') %>% filter(unimod_id == 21)
+
+df <- rbind(df_1, df_2, df_3, df_4)
+df <- df %>%
+  mutate(hl_group = case_when(
+    mean_hl_hours <= 50 ~ "0-50",
+    mean_hl_hours <= 100 ~ "50-100",
+    mean_hl_hours <= 150 ~ "100-150",
+    mean_hl_hours <= 200 ~ "150-200",
+    mean_hl_hours <= 250 ~ "200-250",
+    TRUE ~ "250+"
+  )) 
+
+mean_hours_per_hl_group <- df %>%
+  group_by(hl_group, age_group) %>%
+  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
+
+mod_group_colours <- c('nuc_old' = '#EA7317', 'cyto_old' = '#2364AA', 'nuc_young' = '#F9AE8B', 'cyto_young' = '#219EBC')
+# Plot bar chart
+ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
+  scale_fill_manual(values = mod_group_colours, name = 'Key') +
+  labs(x = "Half-lives (hours)",
+       y = "Mean sum of normalised PTM counts") +
+  theme_classic()
+```
+
+Look at oxPTMs
+
+```{r}
+df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'nuc_old') %>% filter(unimod_id %in% oxPTMs$ID)
+df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'nuc_young') %>% filter(unimod_id %in% oxPTMs$ID)
+df_3 <- human_ptms_cyto_old_hl %>% mutate(age_group = 'cyto_old') %>% filter(unimod_id %in% oxPTMs$ID)
+df_4 <- human_ptms_cyto_young_hl %>% mutate(age_group = 'cyto_young') %>% filter(unimod_id %in% oxPTMs$ID)
+
+df <- rbind(df_1, df_2, df_3, df_4)
+df <- df %>%
+  mutate(hl_group = case_when(
+    mean_hl_hours <= 50 ~ "0-50",
+    mean_hl_hours <= 100 ~ "50-100",
+    mean_hl_hours <= 150 ~ "100-150",
+    mean_hl_hours <= 200 ~ "150-200",
+    mean_hl_hours <= 250 ~ "200-250",
+    TRUE ~ "250+"
+  )) 
+
+mean_hours_per_hl_group <- df %>%
+  group_by(hl_group, age_group) %>%
+  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
+
+mod_group_colours <- c('nuc_old' = '#EA7317', 'cyto_old' = '#2364AA', 'nuc_young' = '#F9AE8B', 'cyto_young' = '#219EBC')
+# Plot bar chart
+ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
+  scale_fill_manual(values = mod_group_colours, name = 'Key') +
+  labs(x = "Half-lives (hours)",
+       y = "Mean sum of normalised PTM counts") +
   theme_classic()
 ```
