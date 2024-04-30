@@ -1,0 +1,191 @@
+---
+title: "Melting temperatures"
+format: html
+editor: visual
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+```{r}
+#human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_complete.tsv", header = T, sep = '\t')
+
+#leadprot_uniprot <- human_complete %>% dplyr::select(Uniprot_entry_name, LeadProt) %>% distinct()
+
+#THIS LOADS THE NEW DATASET
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv", header = T, sep = '\t')
+
+human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
+
+oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
+oxPTMs <- oxPTMs %>%
+  mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
+
+mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
+
+mt <- separate_rows(mt, Protein_ID, sep = ";")
+mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
+
+ptms_mt <- inner_join(human_ptms, mt, by = join_by(LeadProt))
+```
+
+# Initial distribution
+
+It is better to plot these as 2 overlaying density plots.
+
+```{r}
+ggplot() +
+  geom_density(data = mt, aes(x = mean_mt, fill = 'Melting temperatures (literature)'), alpha = 0.7, bw = 0.6) +
+  geom_density(data = ptms_mt, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'Melting temperatures (dataset)'), alpha = 0.7, bw = 0.6) + 
+  labs(x = 'Mean melting temperature', y = 'Density') +
+  theme_classic() +
+  scale_fill_manual(values = c("#5DB7B1", '#FB8500'),breaks = c('Melting temperatures (literature)', 'Melting temperatures (dataset)')) +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 11, family = "Lato"),
+        legend.position = c(0.3,0.9), 
+        axis.text = element_text(size = 12, family = "Lato"),  
+        axis.title = element_text(size = 12, family = "Lato"))
+```
+
+## Outliers
+
+```{r}
+ptms_mt %>% group_by(LeadProt) %>% 
+  summarise(sum = log10(sum(counts_norm_abund_len))) %>%
+  ggplot(aes(sum)) +
+  geom_boxplot() +
+  labs(x = 'Log of the sum of normalised counts')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.text = element_text(size = 11, family = "Lato"),
+        legend.position = c(0.8,0.9), 
+        axis.text = element_text(size = 12, family = "Lato"),  
+        axis.title = element_text(size = 12, family = "Lato"))
+```
+
+```{r}
+data <- ptms_mt %>% group_by(Uniprot_entry_name) %>% 
+  summarise(sum_log = log10(sum(counts_norm_abund_len)))
+
+# Calculate Q1, Q3, and IQR
+Q1 <- quantile(data$sum_log, 0.25)
+Q3 <- quantile(data$sum_log, 0.75)
+IQR <- Q3 - Q1
+
+# Define lower and upper bounds
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.25 * IQR
+
+# Filter outliers
+outliers <- data %>%
+  filter(sum_log > upper_bound)
+
+ptms_mt <- ptms_mt %>% filter(!Uniprot_entry_name %in% outliers$Uniprot_entry_name)
+```
+
+Check that the outliers have been removed.
+
+```{r}
+ptms_mt %>% group_by(LeadProt) %>% 
+  summarise(sum = log10(sum(counts_norm_abund_len))) %>%
+  ggplot(aes(sum)) +
+  geom_boxplot() +
+  labs(x = 'Log of the sum of normalised counts')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.text = element_text(size = 11, family = "Lato"),
+        legend.position = c(0.8,0.9), 
+        axis.text = element_text(size = 12, family = "Lato"),  
+        axis.title = element_text(size = 12, family = "Lato"))
+```
+
+# Binning by mt
+
+```{r}
+#| echo: false
+
+ubi_prot <- human_complete %>% filter(unimod_id == 121) %>% inner_join(mt, by = join_by(LeadProt))
+df <- rbind(ptms_mt, ubi_prot)
+
+df <- df %>%
+  mutate(mt_group = case_when(
+    mean_mt <= 45 ~ "40-45",
+    mean_mt <= 50 ~ "45-50",
+    mean_mt <= 55 ~ "50-55",
+    mean_mt <= 60 ~ "55-60",
+    mean_mt <= 65 ~ "60-65",
+    mean_mt <= 70 ~ "65-70",
+    TRUE ~ "70+"
+  )) %>%
+    mutate(mod_group = case_when(
+    unimod_id == 1 ~'Acetyl',
+    unimod_id == 21 ~'Phosphorylation',
+    unimod_id == 121 ~'Ubiquitination',
+    TRUE ~ "-"
+  )) 
+
+mean_counts_per_mt_group <- df %>%
+  group_by(Uniprot_entry_name, mod_group) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len), mt_group) %>% 
+  filter(!mod_group == '-') %>%
+  distinct() %>% group_by(mod_group, mt_group) %>% summarise(mean_ptms_group = log10(mean(sum_ptms)*100000))
+
+mod_group_colours <- c('Acetyl' = '#3DA5D9', 'Phosphorylation' = '#F9AE8B', 'Ubiquitination' = '#5DB7B1')
+
+# Plot bar chart
+ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = mod_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("40-45", "45-50", "50-55", "55-60", "60-65", "65-70")) +
+  scale_fill_manual(values = mod_group_colours) +
+  labs(x = "Melting temperature",
+       y = "Mean sum of normalised PTM counts") +
+  theme_classic()
+```
+
+# Binning by the number of PTMs
+
+```{r}
+ptms_mt %>% group_by(Uniprot_entry_name) %>% summarise(mean_mt, sum_norm_counts = sum(norm_counts)) %>% distinct() %>% dim()
+```
+
+```{r}
+bins <- ptms_mt %>% group_by(Uniprot_entry_name) %>% summarise(mean_mt, sum_norm_counts = sum(counts_norm_abund_len)) %>% distinct() %>% arrange(desc(sum_norm_counts))
+bin1 <- bins[1:284, ]
+bin2 <- bins[285:568, ]
+bin3 <- bins[569:852, ]
+
+bin1$bin <- 'high'
+bin2$bin <- 'medium'
+bin3$bin <- 'low'
+
+bins <- rbind(bin1, bin2, bin3)
+bins$bin <- factor(bins$bin, levels = c("low", "medium", "high"))
+ggplot(bins, aes(x = mean_mt)) +
+  geom_histogram() +
+  facet_wrap(~bin) +
+  theme_classic()
+```
+
+```{r}
+bin1 <- bins[1:94, ]
+bin2 <- bins[95:189, ]
+bin3 <- bins[190:284, ]
+
+bin1$bin <- 'high'
+bin2$bin <- 'medium'
+bin3$bin <- 'low'
+
+bins <- rbind(bin1, bin2, bin3)
+bins$bin <- factor(bins$bin, levels = c("low", "medium", "high"))
+ggplot(bins, aes(x = mean_mt)) +
+  geom_histogram() +
+  facet_wrap(~bin) +
+  theme_classic()
+```

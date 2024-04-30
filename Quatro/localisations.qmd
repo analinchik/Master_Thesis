@@ -42,9 +42,9 @@ df <- human_ptms_loc %>% group_by(loc) %>% summarise(abundance_loc = sum(norm_co
 
 ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
   geom_col() +
-  labs(x = 'Sum of normalised PTM counts', y = 'Localisation') +
+  labs(y = 'Sum of normalised PTM counts', x = 'Localisation') +
   coord_flip() +
-  theme_classic()
+  theme_classic(base_size = 13)
 ```
 
 # oxPTMs
@@ -145,5 +145,5 @@ ggplot(df, aes(x = loc, y = abundance_loc, fill = mod_group)) +
   scale_fill_manual(values = mod_group_colours, name = 'Key') +
   labs(x = "Protein localisation",
        y = "Mean sum of normalised PTM counts") +
-  theme_classic()
+  theme_classic(base_size = 11)
 ```

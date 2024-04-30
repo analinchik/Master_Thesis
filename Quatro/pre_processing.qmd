@@ -57,6 +57,7 @@ human_complete <- human_complete %>% mutate(norm_counts = total_counts/raw_files
 
 write.table(human_complete, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_complete.tsv', row.names = F, sep="\t", quote = F)
 
+
 ```
 
 ## Selecting post-translational modifications
@@ -97,6 +98,55 @@ write.table(human_ptms_expanded, file = '/Users/anastasialinchik/Desktop/Thesis/
 ```
 
 After filtering out all of the other modifications the final dimensions of the data frame are `r dim(human_ptms)`.
+
+## New reprocessed data
+
+```{r}
+human_new <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/20240321-allPTMs-Human-separateProjects.csv", header = T)
+
+human_complete <- human_new 
+human_complete$modification <- paste(human_complete$ptm_name, human_complete$ptm_res, sep = "_")
+human_complete$unimod_id <- as.numeric(gsub("\\[|\\].*", "", human_complete$ptm_name))
+
+# NORMALISATION BY # OF FILES
+num_raw_files_df <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/Num_files_per_PXD.csv', header = T)
+names(num_raw_files_df) <- c('project_id', 'raw_files_counts')
+
+human_complete <- inner_join(human_complete, num_raw_files_df, by = join_by(project_id == project_id))
+human_complete <- human_complete %>% mutate(norm_counts = total_counts/raw_files_counts)
+
+names(human_complete) <- c("project_id", "Uniprot_entry_name", "LeadProt", "ptm_loc", "ptm_name", "ptm_res", "ptm_class", "total_counts", "modification", "unimod_id", "raw_files_counts", "norm_counts")
+
+# BY ABUNDANCE
+
+protein_abundances <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_abundances.tsv", sep = '\t', skip = 11, header = T)
+paxdb_mapping <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/paxdb_mapping.tsv", sep = '\t', skip = 11, col.names = c('paxdb_id', 'UniProt')) %>% filter(grepl("_HUMAN$", UniProt))
+protein_abundances <- inner_join(protein_abundances, paxdb_mapping, by = join_by(string_external_id == paxdb_id)) %>% dplyr::select(-c("string_external_id", "raw_spectral_count"))
+
+human_complete <- inner_join(human_complete, protein_abundances, by = join_by(`Uniprot_entry_name` == `UniProt`)) %>%
+  mutate(counts_norm_abund = norm_counts/abundance)
+
+# BY LENGTH
+
+lengths <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/protein_lengths_human.tsv", sep = '\t')
+lengths <- lengths %>% dplyr::select(UniProt = From,  Length)
+
+# there are some duplications for the lengths
+lengths <- lengths %>% 
+  group_by(UniProt) %>%
+  summarise(Length = mean(Length))
+
+human_complete <- inner_join(human_complete, lengths, by = join_by(LeadProt == UniProt)) %>%
+  mutate(counts_norm_abund_len = counts_norm_abund/Length)
+
+human_complete <- human_complete %>% mutate(log_counts = log10(counts_norm_abund_len))
+
+write.table(human_complete, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv', row.names = F, sep="\t", quote = F)
+```
+
+```{r}
+boxplot(human_complete$log_counts)
+```
 
 # Protein half-lives
 
