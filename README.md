@@ -1,7 +1,7 @@
 ![alt text](image-2.png)
 
 
-The master thesis was conducted at the Switch lab under the supervision of Joost Schymkowitz at the Switch Lab. 
+This master thesis was conducted at the Switch lab under the supervision of Joost Schymkowitz at the Switch Lab. 
 
 # Description of R files
 
@@ -69,6 +69,21 @@ Mathieson, Toby, et al. ‘Systematic Analysis of Protein Turnover in Primary Ce
 (The file with protein half-lives from all cell types.)
 
 The file was named `long_proteins_hl_grouped.tsv`
+
+## Melting temperatures
+
+Source: 
+Leuenberger, Pascal, et al. ‘Cell-Wide Analysis of Protein Thermal Unfolding Reveals Determinants of Thermostability’. Science, vol. 355, no. 6327, Feb. 2017, p. eaai7825. DOI.org (Crossref), https://doi.org/10.1126/science.aai7825.
+
+(download file: aai7825_leuenberger_table-s3.xlsx)
+
+Melting temperatures for HeLa cells were used. 
+
+The file was renamed to `MeltingTemperatures.xlsx`
+
+## IUPred
+
+In order to get IUPred3 scores that were used in this thesis, the file `IUPred_score_calc_frac.py` needs to be run. The corresponding slurm script can be found here: `iupred.slurm`. The generation of IUPred3 scores requires the file `uniprot_ids_proteins.tsv` as input (this contains the UniProt IDs of the proteins, which scores are to be calculated).
 
 ## Localisation
 
