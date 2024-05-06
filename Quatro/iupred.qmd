@@ -1,0 +1,197 @@
+---
+title: "IUPred3 for disorder analysis"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| include: false
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(scales)
+```
+
+```{r}
+#| echo: false
+
+# THIS LOADS THE NEW DATASET
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv", header = T, sep = '\t')
+
+human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
+
+# IUPRED SCORES
+iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
+
+human_ptms_iupred <- inner_join(human_ptms, iupred_scores, by = join_by('LeadProt' =='UniProt_ID'))
+```
+
+# Distribution of IUPred3 scores
+
+IUPred REST API was used to get all of the IUPred scores for all of the proteins. IUPred outputs a score for each amino acid within a protein. A Python script was used to get the scores for each amino acid in a protein and average them for each protein; the resulting score is taken as the IUPred score for that protein. Below is the distribution of the IUPred scores in the dataset.
+
+```{r}
+#| echo: false
+#| message: false
+
+ggplot(iupred_scores, aes(Ratio_Above_0.5)) +
+  geom_histogram(fill = '#919191', bins = 40) +
+  labs(x = 'Proportion of amino acids with a score above 0.5', y = 'Counts') +
+  theme_classic() +
+  theme(
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+The plot below shows how the weighted abundance of modifications changes with the IUPred score. There is no correlation between the two variables.
+
+# Outliers
+
+```{r}
+#| echo: false
+#| warning: false
+human_ptms_iupred %>% group_by(LeadProt) %>% 
+  summarise(sum = log10(sum(counts_norm_abund_len))) %>%
+  ggplot(aes(sum)) +
+  geom_boxplot() +
+  labs(x = 'Log of the sum of normalised counts')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.text = element_text(size = 13, family = "Lato"),
+        legend.position = c(0.8,0.9), 
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+data <- human_ptms_iupred %>% group_by(Uniprot_entry_name) %>% 
+  summarise(sum_log = log10(sum(counts_norm_abund_len)))
+
+# Calculate Q1, Q3, and IQR
+Q1 <- quantile(data$sum_log, 0.25)
+Q3 <- quantile(data$sum_log, 0.75)
+IQR <- Q3 - Q1
+
+# Define lower and upper bounds
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+# Filter outliers
+outliers <- data %>%
+  filter(sum_log > upper_bound | sum_log < lower_bound)
+
+human_ptms_iupred <- human_ptms_iupred %>% filter(!Uniprot_entry_name %in% outliers$Uniprot_entry_name)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| eval: false
+
+df <- human_ptms_iupred %>% group_by(LeadProt) %>%
+  summarise(Ratio_Above_0.5, sum_norm_counts = sum(counts_norm_abund_len)) %>% distinct()
+
+ggplot(data = df, aes(x = Ratio_Above_0.5, y = sum_norm_counts)) +
+  geom_point(col = '#919191') +
+  geom_smooth(method = 'lm', se = T, col = "black") +
+  labs(x = 'Proportion of amino acids with a score above 0.5', y = 'Log10 of the sum of normalised counts') +
+  scale_y_log10(limits = c(0.00001,1)) +
+  theme_classic()
+```
+
+# Binning
+
+```{r}
+#| echo: false
+#| message: false
+df <- human_ptms_iupred %>%
+  mutate(ratio_group = case_when(
+    Ratio_Above_0.5 <= 0.2 ~ "0 - 0.2",
+    Ratio_Above_0.5 <= 0.4 ~ "0.2 - 0.4",
+    Ratio_Above_0.5 <= 0.6 ~ "0.4 - 0.6",
+    Ratio_Above_0.5 <= 0.8 ~ "0.6 - 0.8",
+    Ratio_Above_0.5 <= 1 ~ "0.8 - 1.0",
+    TRUE ~ "1+"
+  )) 
+
+mean_counts_per_mt_group <- df %>%
+  group_by(Uniprot_entry_name, ratio_group) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len)) %>% 
+  filter(!ratio_group == '-') %>%
+  distinct() %>% group_by(ratio_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
+
+# Plot bar chart
+ggplot(mean_counts_per_mt_group, aes(x = ratio_group, y = mean_ptms_group)) +
+  geom_col(fill = '#919191') +
+  scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) +
+  scale_y_continuous(labels = scales::label_number(scale = 1)) +
+  labs(x = "Proportion of amino acids with a score above 0.5",
+       y = "Mean normalised counts") +
+  theme_classic() +
+  theme(
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+There is also an R package that can be used to calculate the IUPred score, however it uses the old version of IUPred and it also takes a very long time to load. (Though the Python script also took \~ 7 hours to execute)
+
+[IUPred Vignette (bioconductor.org)](https://bioconductor.org/packages/release/bioc/vignettes/idpr/inst/doc/iupred-vignette.html)
+
+```{r}
+#| eval: false
+#| echo: false
+# this uses the R package for IUPRED2. The REST API was used bcs it uses the latest version of IUPRED so more proteins are recognised + it is faster. 
+#uniprot_ids <- c('P01023', 'P42684', 'Q9BYF1')
+
+predict_disorder_scores <- function(uniprot_ids) {
+  disorder_scores <- c()
+  
+  for (id in uniprot_ids) {
+    disorder_df <- iupred(
+      id,
+      iupredType = "long",
+      plotResults = F,
+      proteinName = NA
+    )
+    
+    disorder_score <-
+      disorder_df %>% summarise(mean_score = mean(IUPred2))
+    disorder_scores <- append(disorder_scores, disorder_score[1, 1])
+    
+  }
+  
+  disorder_df <-
+    data.frame(uniprot_id = uniprot_ids, disorder_score = disorder_scores)
+  
+  return(disorder_df)
+}
+
+missing_uniprot_ids <- c('A0A024R7F8', 'A0A024R127')
+ageing_proteins_ids_disorder <- ageing_proteins_ids %>% filter(! `Uniprot entry` %in% missing_uniprot_ids)
+
+disorder_df <- predict_disorder_scores(ageing_proteins_ids_disorder$`Uniprot entry`)
+```
+
+# Python scripts
+
+-   A Python script was used to calculate the stability scores for all of the proteins using IUPred3.
+
+-   `IUPred_score_calc_frac` was used to calculate the score as the number of amino acids above the threshold (0.5 was used since this was the default) over the total number of amino acids.
+
+-   `iupred.slurm` was used to run the file on the HPC.
+
+-   `uniprot_ids_proteins.tsv` was the input file used. It contains the list of all the proteins that are present in the re-analysed dataset. \[18929 proteins\]

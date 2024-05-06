@@ -32,7 +32,6 @@ human_df <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/Human-s
 human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
 human_ptms_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_hl.tsv", header = T, sep = '\t')
 
-
 human_ptms_expanded <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded.tsv", header = T, sep = '\t')
 human_ptms_expanded_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl.tsv", header = T, sep = '\t')
 human_ptms_expanded_length <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_length.tsv", header = T, sep = '\t')
@@ -147,7 +146,6 @@ There is a significant difference between the number of modifications in ageing 
 ageing_modifications <- ageing_abundance %>% select(modification) %>% distinct()
 nonageing_modifications <- complementary_data %>% select(modification) %>% distinct()
 anti_join(ageing_modifications, nonageing_modifications)
-
 ```
 
 ### oxPTMs

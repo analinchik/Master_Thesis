@@ -45,7 +45,6 @@ library(rcompanion)  # for wtd.boxplot.stats
 human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
 human_ptms_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_hl.tsv", header = T, sep = '\t')
 
-
 human_ptms_expanded_hl <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_hl.tsv", header = T, sep = '\t')
 human_ptms_expanded_length <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms_expanded_length.tsv", header = T, sep = '\t')
 

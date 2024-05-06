@@ -1,16 +1,32 @@
 ---
 title: "Melting temperatures"
-format: html
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
 editor: visual
 ---
 
 ```{r}
+#| echo: false
+#| include: false
+
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+library(readxl)
+library(stringr)
+library(scales)
 ```
 
 ```{r}
+#| echo: false
+#| include: false
 #human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_complete.tsv", header = T, sep = '\t')
 
 #leadprot_uniprot <- human_complete %>% dplyr::select(Uniprot_entry_name, LeadProt) %>% distinct()
@@ -30,29 +46,39 @@ mt <- separate_rows(mt, Protein_ID, sep = ";")
 mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
 
 ptms_mt <- inner_join(human_ptms, mt, by = join_by(LeadProt))
+complete_mt <- inner_join(human_complete, mt, by = join_by(LeadProt))
+lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
+AGE <- c(6, 907, 378)
 ```
 
 # Initial distribution
 
+The melting temperatures were obtained from:
+
+Langenberg, Tobias, et al. 'Thermodynamic and Evolutionary Coupling between the Native and Amyloid State of Globular Proteins'. *Cell Reports*, vol. 31, no. 2, Apr. 2020, p. 107512. *DOI.org (Crossref)*, https://doi.org/10.1016/j.celrep.2020.03.076.
+
 It is better to plot these as 2 overlaying density plots.
 
 ```{r}
+#| echo: false
+#| warning: false
 ggplot() +
-  geom_density(data = mt, aes(x = mean_mt, fill = 'Melting temperatures (literature)'), alpha = 0.7, bw = 0.6) +
-  geom_density(data = ptms_mt, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'Melting temperatures (dataset)'), alpha = 0.7, bw = 0.6) + 
-  labs(x = 'Mean melting temperature', y = 'Density') +
+  geom_density(data = mt, aes(x = mean_mt, fill = 'Data found by Langenberg et al.'), alpha = 0.7, bw = 0.6) +
+  geom_density(data = ptms_mt, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'Re-processed dataset'), alpha = 0.7, bw = 0.6) + 
+  labs(x = 'Melting temperature (°C)', y = 'Density') +
   theme_classic() +
-  scale_fill_manual(values = c("#5DB7B1", '#FB8500'),breaks = c('Melting temperatures (literature)', 'Melting temperatures (dataset)')) +
+  scale_fill_manual(values = c("white", '#919191'),breaks = c('Data found by Langenberg et al.', 'Re-processed dataset')) +
   theme(legend.title = element_blank(),
-        legend.text = element_text(size = 11, family = "Lato"),
-        legend.position = c(0.3,0.9), 
-        axis.text = element_text(size = 12, family = "Lato"),  
-        axis.title = element_text(size = 12, family = "Lato"))
+        legend.text = element_text(size = 13, family = "Lato"),
+        legend.position = c(0.28,0.9), 
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
 ```
 
 ## Outliers
 
 ```{r}
+#| echo: false
 ptms_mt %>% group_by(LeadProt) %>% 
   summarise(sum = log10(sum(counts_norm_abund_len))) %>%
   ggplot(aes(sum)) +
@@ -62,13 +88,14 @@ ptms_mt %>% group_by(LeadProt) %>%
   theme(legend.title = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
-        legend.text = element_text(size = 11, family = "Lato"),
+        legend.text = element_text(size = 13, family = "Lato"),
         legend.position = c(0.8,0.9), 
-        axis.text = element_text(size = 12, family = "Lato"),  
-        axis.title = element_text(size = 12, family = "Lato"))
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}
+#| echo: false
 data <- ptms_mt %>% group_by(Uniprot_entry_name) %>% 
   summarise(sum_log = log10(sum(counts_norm_abund_len)))
 
@@ -79,7 +106,7 @@ IQR <- Q3 - Q1
 
 # Define lower and upper bounds
 lower_bound <- Q1 - 1.5 * IQR
-upper_bound <- Q3 + 1.25 * IQR
+upper_bound <- Q3 + 1.5 * IQR
 
 # Filter outliers
 outliers <- data %>%
@@ -91,6 +118,7 @@ ptms_mt <- ptms_mt %>% filter(!Uniprot_entry_name %in% outliers$Uniprot_entry_na
 Check that the outliers have been removed.
 
 ```{r}
+#| echo: false
 ptms_mt %>% group_by(LeadProt) %>% 
   summarise(sum = log10(sum(counts_norm_abund_len))) %>%
   ggplot(aes(sum)) +
@@ -100,19 +128,323 @@ ptms_mt %>% group_by(LeadProt) %>%
   theme(legend.title = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
-        legend.text = element_text(size = 11, family = "Lato"),
+        legend.text = element_text(size = 13, family = "Lato"),
         legend.position = c(0.8,0.9), 
-        axis.text = element_text(size = 12, family = "Lato"),  
-        axis.title = element_text(size = 12, family = "Lato"))
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
 ```
 
-# Binning by mt
+## Distributions
+
+### Phoshorylation
 
 ```{r}
 #| echo: false
+#| warning: false
+human_ptms_hl_mod_group <- ptms_mt
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 21, 'Phosphorylated', 'Non-phosphorylated')
 
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-phosphorylated", "Phosphorylated"))
+
+# all of the proteins that get phosphorylated
+pho_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Phosphorylated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get phosphorylated are not included in the Non-phosphorylated section
+
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Phosphorylated' | (mod_group == 'Non-phosphorylated' & (!LeadProt %in% pho_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.5)) +
+  scale_fill_manual(values = c("white", '#b3de69')) +
+  labs(y = 'Mean half-lives')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+### Acetylation
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+human_ptms_hl_mod_group <- ptms_mt 
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 1, 'Acetylated', 'Non-acetylated')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-acetylated", "Acetylated"))
+
+# all of the proteins that get acetylated
+acetyl_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Acetylated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get methylated are not included in the non-meth section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Acetylated' | (mod_group == 'Non-acetylated' & (!LeadProt %in% acetyl_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-acetylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Acetylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#8dd3c7')) +
+  labs(y = 'Mean half-lives')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+### Ubiquitination
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+ubi_prot <- human_complete %>% filter(unimod_id == 121) %>% inner_join(mt, by = join_by(LeadProt))
+
+human_ptms_hl_mod_group <- ptms_mt
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, ubi_prot)
+
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 121, 'Ubiquitinated', 'Non-ubiquitinated')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-ubiquitinated", "Ubiquitinated"))
+
+# all of the proteins that get oxidised
+ubi_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Ubiquitinated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get oxidised are not included in the non-oxi section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Ubiquitinated' | (mod_group == 'Non-ubiquitinated' & (!LeadProt %in% ubi_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-ubiquitinated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Ubiquitinated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#bebada')) +
+  labs(y = 'Mean half-lives')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+### Methylation
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+human_ptms_hl_mod_group <- ptms_mt
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 34, 'Methylated', 'Non-methylated')
+human_ptms_hl_mod_group <- human_ptms_hl_mod_group 
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-methylated", "Methylated"))
+
+# all of the proteins that get methylated
+meth_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Methylated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get methylated are not included in the non-meth section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Methylated' | (mod_group == 'Non-methylated' & (!LeadProt %in% meth_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-methylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Methylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#80b1d3')) +
+  labs(y = 'Mean half-lives')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+### oxPTMs
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+human_ptms_hl_mod_group <- complete_mt 
+
+human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% oxPTMs$unimod_id & human_ptms_hl_mod_group$ptm_res %in% oxPTMs$AAs_list), 'oxPTMs', 'Non-oxPTMs')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-oxPTMs", "oxPTMs"))
+
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-oxPTMs' & ptm_class == 'Post-translational') | mod_group == 'oxPTMs')
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-oxPTMs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'oxPTMs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#fdb462')) +
+  labs(y = 'Mean half-lives')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+### Lysine acylations
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+human_ptms_hl_mod_group <- complete_mt 
+
+human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% lysine_acylation & human_ptms_hl_mod_group$ptm_res == 'K'), 'K acylation', 'Non-acylated')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-acylated", "K acylation"))
+
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-acylated' & ptm_class == 'Post-translational') | mod_group == 'K acylation')
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-acylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'K acylation') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#fb8072')) +
+  labs(y = 'Mean half-lives')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+### AGEs
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+human_ptms_hl_mod_group <- complete_mt 
+
+human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% AGE & human_ptms_hl_mod_group$ptm_res == 'K'), 'AGEs', 'Non-AGEs')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-AGEs", "AGEs"))
+
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-AGEs' & ptm_class == 'Post-translational') | mod_group == 'AGEs')
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-AGEs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'AGEs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_mt, mod_group) %>%
+distinct(Uniprot_entry_name, mean_mt, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#fccde5')) +
+  labs(y = 'Mean half-lives')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+# Binning by MT
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+df <- ptms_mt %>%
+  mutate(mt_group = case_when(
+    mean_mt <= 45 ~ "40-45",
+    mean_mt <= 50 ~ "45-50",
+    mean_mt <= 55 ~ "50-55",
+    mean_mt <= 60 ~ "55-60",
+    mean_mt <= 65 ~ "60-65",
+    mean_mt <= 70 ~ "65-70",
+    TRUE ~ "70+"
+  )) %>%
+    mutate(mod_group = case_when(
+    unimod_id == 1 ~'Acetylated',
+    unimod_id == 34 ~'Methylated',
+    TRUE ~ "-"
+  )) 
+
+mean_counts_per_mt_group <- df %>%
+  group_by(Uniprot_entry_name, mod_group) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len), mt_group) %>% 
+  filter(!mod_group == '-') %>%
+  distinct() %>% group_by(mod_group, mt_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
+
+mod_group_colours <- c('Acetylated' = '#8dd3c7', 'Methylated' = '#80b1d3')
+
+# Plot bar chart
+ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = mod_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("40-45", "45-50", "50-55", "55-60", "60-65", "65-70")) +
+  scale_y_continuous(limits = c(0, 0.0004), labels = scales::label_number(scale = 1e4)) +
+  scale_fill_manual(values = mod_group_colours) +
+  labs(x = "Melting temperature (°C)",
+       y = "Mean normalised counts (scaled by 1e4)") +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 13, family = "Lato"),
+        legend.position = c(0.8,0.92), 
+        legend.direction = 'horizontal',
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
 ubi_prot <- human_complete %>% filter(unimod_id == 121) %>% inner_join(mt, by = join_by(LeadProt))
 df <- rbind(ptms_mt, ubi_prot)
+
+a <- human_complete %>% filter(unimod_id %in% c(lysine_acylation, AGE)) %>% inner_join(mt, by = join_by(LeadProt))
+df <- rbind(df, a)
 
 df <- df %>%
   mutate(mt_group = case_when(
@@ -124,10 +456,59 @@ df <- df %>%
     mean_mt <= 70 ~ "65-70",
     TRUE ~ "70+"
   )) %>%
+  mutate(mod_group = case_when(
+    unimod_id == 121 ~'Ubiquitinated',
+    unimod_id %in% AGE ~ 'AGE',
+    (unimod_id %in% lysine_acylation & ptm_res == 'K') ~ 'K acylation',
+    TRUE ~ "-"
+  ))
+
+mean_counts_per_mt_group <- df %>%
+  group_by(Uniprot_entry_name, mod_group) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len), mt_group) %>% 
+  filter(!mod_group == '-') %>%
+  distinct() %>% group_by(mod_group, mt_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
+
+mod_group_colours <- c('AGE' = '#fccde5', 'Ubiquitinated' = '#bebada', 'K acylation' = '#fb8072')
+
+# Plot bar chart
+ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = mod_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("40-45", "45-50", "50-55", "55-60", "60-65", "65-70")) +
+  scale_y_continuous(limits = c(0,0.00035), labels = scales::label_number(scale = 1e4)) +
+  scale_fill_manual(values = mod_group_colours) +
+  labs(x = "Melting temperature (°C)",
+       y = "Mean normalised counts (scaled by 1e4)") +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 13, family = "Lato"),
+        legend.position = c(0.72,0.9), 
+        legend.direction = 'horizontal',
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+oxptms_prot <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id) %>% inner_join(mt, by = join_by(LeadProt))
+df <- rbind(ptms_mt, oxptms_prot)
+
+df <- ptms_mt %>%
+  mutate(mt_group = case_when(
+    mean_mt <= 45 ~ "40-45",
+    mean_mt <= 50 ~ "45-50",
+    mean_mt <= 55 ~ "50-55",
+    mean_mt <= 60 ~ "55-60",
+    mean_mt <= 65 ~ "60-65",
+    mean_mt <= 70 ~ "65-70",
+    TRUE ~ "70+"
+  )) %>%
     mutate(mod_group = case_when(
-    unimod_id == 1 ~'Acetyl',
-    unimod_id == 21 ~'Phosphorylation',
-    unimod_id == 121 ~'Ubiquitination',
+    unimod_id == 21 ~'Phosphorylated',
+    (unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) ~ 'oxPTMs',
     TRUE ~ "-"
   )) 
 
@@ -135,57 +516,85 @@ mean_counts_per_mt_group <- df %>%
   group_by(Uniprot_entry_name, mod_group) %>%
   summarize(sum_ptms = sum(counts_norm_abund_len), mt_group) %>% 
   filter(!mod_group == '-') %>%
-  distinct() %>% group_by(mod_group, mt_group) %>% summarise(mean_ptms_group = log10(mean(sum_ptms)*100000))
+  distinct() %>% group_by(mod_group, mt_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
 
-mod_group_colours <- c('Acetyl' = '#3DA5D9', 'Phosphorylation' = '#F9AE8B', 'Ubiquitination' = '#5DB7B1')
+mod_group_colours <- c('Phosphorylated' = '#b3de69', 'oxPTMs' = '#fdb462')
 
 # Plot bar chart
 ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = mod_group)) +
   geom_bar(stat = "identity", position = 'dodge') +
   scale_x_discrete(limits = c("40-45", "45-50", "50-55", "55-60", "60-65", "65-70")) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e4)) +
   scale_fill_manual(values = mod_group_colours) +
-  labs(x = "Melting temperature",
-       y = "Mean sum of normalised PTM counts") +
-  theme_classic()
+  labs(x = "Melting temperature (°C)",
+       y = "Mean normalised counts (scaled by 1e4)") +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 13, family = "Lato"),
+        legend.position = c(0.75,0.93), 
+        legend.direction = 'horizontal',
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
 ```
 
 # Binning by the number of PTMs
 
 ```{r}
-ptms_mt %>% group_by(Uniprot_entry_name) %>% summarise(mean_mt, sum_norm_counts = sum(norm_counts)) %>% distinct() %>% dim()
-```
-
-```{r}
+#| echo: false
+#| message: false
+#| warning: false
 bins <- ptms_mt %>% group_by(Uniprot_entry_name) %>% summarise(mean_mt, sum_norm_counts = sum(counts_norm_abund_len)) %>% distinct() %>% arrange(desc(sum_norm_counts))
+#dim(bins)
 bin1 <- bins[1:284, ]
 bin2 <- bins[285:568, ]
 bin3 <- bins[569:852, ]
 
-bin1$bin <- 'high'
-bin2$bin <- 'medium'
-bin3$bin <- 'low'
+bin1$bin <- 'High'
+bin2$bin <- 'Medium'
+bin3$bin <- 'Low'
 
 bins <- rbind(bin1, bin2, bin3)
-bins$bin <- factor(bins$bin, levels = c("low", "medium", "high"))
+bins$bin <- factor(bins$bin, levels = c("Low", "Medium", "High"))
 ggplot(bins, aes(x = mean_mt)) +
-  geom_histogram() +
+  geom_histogram(fill = '#919191') +
+  labs(x = 'Melting temperature (°C)', y = 'Protein count') +
   facet_wrap(~bin) +
-  theme_classic()
+  theme_bw() +
+  theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(size = 13, family = "Lato"),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"),
+        strip.background.x = element_blank()
+        )
 ```
 
 ```{r}
+#| echo: false
+#| message: false
+
 bin1 <- bins[1:94, ]
 bin2 <- bins[95:189, ]
 bin3 <- bins[190:284, ]
 
-bin1$bin <- 'high'
-bin2$bin <- 'medium'
-bin3$bin <- 'low'
+bin1$bin <- 'High'
+bin2$bin <- 'Medium'
+bin3$bin <- 'Low'
 
 bins <- rbind(bin1, bin2, bin3)
-bins$bin <- factor(bins$bin, levels = c("low", "medium", "high"))
+bins$bin <- factor(bins$bin, levels = c("Low", "Medium", "High"))
 ggplot(bins, aes(x = mean_mt)) +
-  geom_histogram() +
+  geom_histogram( fill = '#919191') +
+  labs(x = 'Melting temperature (°C)', y = 'Protein count') +
   facet_wrap(~bin) +
-  theme_classic()
+  theme_bw() +
+  theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(size = 13, family = "Lato"),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"),
+        strip.background.x = element_blank()
+        )
 ```

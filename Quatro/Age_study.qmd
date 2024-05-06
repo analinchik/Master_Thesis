@@ -77,6 +77,7 @@ df %>%
   labs(title = "Boxplot of Values Faceted by Category") +
   theme_minimal()
 ```
+
 ```{r}
 p2 <- ggplot(data=df, aes(x=norm_count_per_protein, group=project, fill=project)) +
     geom_density(adjust=1.5, alpha=.4) +
@@ -84,6 +85,7 @@ p2 <- ggplot(data=df, aes(x=norm_count_per_protein, group=project, fill=project)
 p2
 
 ```
+
 ```{r}
 p <- df %>% filter(norm_count_per_protein < 0.1) %>%
   ggplot( aes(x=norm_count_per_protein, fill=project)) +
