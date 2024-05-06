@@ -10,8 +10,6 @@ format:
     toc-title: Contents
     smooth-scroll: true
 editor: visual
-params:
-  organism: human
 ---
 
 ```{r}
@@ -45,6 +43,12 @@ human_ptms <- human_df %>% filter(ptm_class == 'Post-translational')
 -   For each project, the detected modifications are listed, along with the class of the modification, the UNIMOD identifier, the number of PSMs for particular protein, the position of the amino acid, the amino acid where the modification was found.
 
     -   all of the modifications are labelled using [UniMod](https://www.unimod.org/modifications_list.php?goto=6) identifiers. Furthermore, the UniProt identifier of the protein on which the modification was found is listed, the amino acid on which the modification was found and the position of the amino acid. Finally, the total counts of the PSM spectra matches are also listed.
+
+How many projects were analysed:
+
+```{r}
+human_df %>% distinct(project_id)
+```
 
 ## General questions
 

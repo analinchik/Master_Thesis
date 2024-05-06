@@ -58,10 +58,6 @@ AGE <- c(6, 907, 378)
 
 -   Protein half-lives of long-lived proteins can be found here: [Systematic analysis of protein turnover in primary cells \| Nature Communications](https://www.nature.com/articles/s41467-018-03106-1#Sec6)
 
--   Protein half-lives of mouse proteins can be found here: [An atlas of protein turnover rates in mouse tissues \| Nature Communications](https://www.nature.com/articles/s41467-021-26842-3)
-
-    -   CC_Results: Results for Cricoid Cartilage (Cartilage in manuscript)
-
 ```{r}
 #| echo: false
 #| include: false
