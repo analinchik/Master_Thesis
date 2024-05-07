@@ -1,4 +1,4 @@
-![alt text](image-2.png)
+![alt text](banner.png)
 
 
 This master thesis was conducted at the Switch lab under the supervision of Joost Schymkowitz at the Switch Lab. 
