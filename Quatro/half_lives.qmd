@@ -26,6 +26,7 @@ library(ggpubr)
 library(plotly)
 library(stringr)
 library(scales)
+library(survey)
 ```
 
 ```{r}
@@ -340,12 +341,19 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
-Testing whether the half-lives between groups are significantly different
+Testing whether the half-lives between groups are significantly different. Wilcoxon test (note that the sample sizes are uneven). The p value was adjusted uisng the formula p/sqrt(N/100), where N = n1+ n2.
 
 ```{r}
 #| echo: false
-#| eval: false
-wilcox.test(proteins_exclusive$mean_hl_hours ~ proteins_exclusive$mod_group)
+
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
 ```
 
 Enriched proteins in both datasets:
@@ -455,6 +463,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### Ubiquitination
 
 Ubiquitination has the classification 'Other'. Take that as one group. The second group is all of the PTMs. 890 proteins overlap so you have 289 proteins taht are not ubiquitinated and have PTMs and we know their half-lives. These make up the second group.
@@ -510,6 +530,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### Methylation
 
 -   Filtered by the \[34\]Methyl modification
@@ -562,6 +594,18 @@ ggplot() +
         axis.title.x = element_blank(),
         axis.text = element_text(size = 13, family = "Lato"),  
         axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
 ```
 
 Enrichment:
@@ -660,6 +704,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### Lysine acylations
 
 ```{r}
@@ -704,6 +760,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### AGEs
 
 ```{r}
@@ -746,6 +814,18 @@ ggplot() +
         axis.title.x = element_blank(),
         axis.text = element_text(size = 13, family = "Lato"),  
         axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
 ```
 
 ## Binning
@@ -1223,6 +1303,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### Acetylation
 
 ```{r}
@@ -1272,6 +1364,18 @@ ggplot() +
         axis.title.x = element_blank(),
         axis.text = element_text(size = 13, family = "Lato"),  
         axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
 ```
 
 ### Ubiquitination
@@ -1329,6 +1433,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### Methylation
 
 ```{r}
@@ -1379,6 +1495,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### oxPTMs
 
 ```{r}
@@ -1423,6 +1551,18 @@ ggplot() +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
+```
+
 ### Lysine acylations
 
 ```{r}
@@ -1463,6 +1603,18 @@ ggplot() +
         axis.title.x = element_blank(),
         axis.text = element_text(size = 13, family = "Lato"),  
         axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
 ```
 
 ### AGEs
@@ -1507,6 +1659,18 @@ ggplot() +
         axis.title.x = element_blank(),
         axis.text = element_text(size = 13, family = "Lato"),  
         axis.title = element_text(size = 13, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+
+print('P-value cut-off')
+0.05/sqrt((dim(proteins_exclusive)[1])/100)
 ```
 
 ## Binning

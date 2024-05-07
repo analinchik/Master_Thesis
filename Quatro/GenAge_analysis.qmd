@@ -12,6 +12,21 @@ genage <- read.csv('/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv
 #human_complete_hl_short_ageing <- human_complete_hl_short %>% filter(Uniprot_entry_name %in% genage$uniprot)
 ```
 
+```{r}
+genage <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv', header = T)
+ageing_prot <- human_ptms %>% filter(Uniprot_entry_name %in% genage$uniprot)
+ageing_prot %>% group_by(Uniprot_entry_name) %>%
+  summarise(count = sum(norm_counts)) %>% arrange(desc(count))
+```
+
+```{r}
+table <- ageing_prot %>%
+  group_by(Uniprot_entry_name) %>%
+  summarize(PTMs = paste(unique(ptm_name), collapse = "; "))
+
+kable(table, caption = "Summary of PTMs by Residue")
+```
+
 # Phosphorylation
 
 #### GenAge
