@@ -1,19 +1,49 @@
 ---
 title: "GenAge"
-format: html
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
 editor: visual
 ---
 
 ```{r}
+#THIS LOADS THE NEW DATASET
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv", header = T, sep = '\t')
+
+human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
+
+leadprot_uniprot <- human_complete %>% dplyr::select(Uniprot_entry_name, LeadProt) %>% distinct()
+
+# MODIFICATIONS
+oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
+oxPTMs <- oxPTMs %>%
+  mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
+
+lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
+AGE <- c(6, 907, 378)
+
 genage <- read.csv('/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv', header = T) %>% dplyr::select(uniprot)# 295 proteins were mapped
+
+#short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`) %>% rename(LeadProt = `Uniprot ID`, mean_hl_hours = `Half-life`)
+
+#long_lived_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_grouped.tsv', sep = '\t', header = T)
+
+#human_ptms_hl_short <- inner_join(human_ptms, short_lived_proteins_hl, by = join_by(LeadProt))
+
+#human_complete_hl_short <- inner_join(human_complete, short_lived_proteins_hl, by = join_by(LeadProt))
 ```
 
 ```{r}
-#human_complete_hl_short_ageing <- human_complete_hl_short %>% filter(Uniprot_entry_name %in% genage$uniprot)
+human_complete_hl_short_ageing <- human_complete_hl_short %>% filter(Uniprot_entry_name %in% genage$uniprot)
 ```
 
 ```{r}
-genage <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/genage_human.csv', header = T)
 ageing_prot <- human_ptms %>% filter(Uniprot_entry_name %in% genage$uniprot)
 ageing_prot %>% group_by(Uniprot_entry_name) %>%
   summarise(count = sum(norm_counts)) %>% arrange(desc(count))
@@ -36,7 +66,7 @@ Got the list of genes that are associated with ageing from GenAge
 ```{r}
 #| echo: false
 
-#genage_in_human_ptms <- human_ptms %>% filter(Uniprot_entry_name %in% genage$uniprot) %>% distinct(Uniprot_entry_name)
+genage_in_human_ptms <- human_ptms %>% filter(Uniprot_entry_name %in% genage$uniprot) %>% distinct(Uniprot_entry_name)
 
 human_ptms_hl_short_ageing <- human_ptms_hl_short %>% filter(Uniprot_entry_name %in% genage$uniprot) 
 ```

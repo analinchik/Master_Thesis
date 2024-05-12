@@ -20,6 +20,7 @@ library(ggplot2)
 library(tidyr)
 library(readxl)
 library(scales)
+library(stringr)
 ```
 
 ```{r}
@@ -34,7 +35,63 @@ human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
 iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
 
 human_ptms_iupred <- inner_join(human_ptms, iupred_scores, by = join_by('LeadProt' =='UniProt_ID'))
+
+lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
+AGE <- c(6, 907, 378)
+
+oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
+oxPTMs <- oxPTMs %>%
+  mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
 ```
+
+There is also an R package that can be used to calculate the IUPred score, however it uses the old version of IUPred and it also takes a very long time to load. (Though the Python script also took \~ 7 hours to execute)
+
+[IUPred Vignette (bioconductor.org)](https://bioconductor.org/packages/release/bioc/vignettes/idpr/inst/doc/iupred-vignette.html)
+
+```{r}
+#| eval: false
+#| echo: false
+# this uses the R package for IUPRED2. The REST API was used bcs it uses the latest version of IUPRED so more proteins are recognised + it is faster. 
+#uniprot_ids <- c('P01023', 'P42684', 'Q9BYF1')
+
+predict_disorder_scores <- function(uniprot_ids) {
+  disorder_scores <- c()
+  
+  for (id in uniprot_ids) {
+    disorder_df <- iupred(
+      id,
+      iupredType = "long",
+      plotResults = F,
+      proteinName = NA
+    )
+    
+    disorder_score <-
+      disorder_df %>% summarise(mean_score = mean(IUPred2))
+    disorder_scores <- append(disorder_scores, disorder_score[1, 1])
+    
+  }
+  
+  disorder_df <-
+    data.frame(uniprot_id = uniprot_ids, disorder_score = disorder_scores)
+  
+  return(disorder_df)
+}
+
+missing_uniprot_ids <- c('A0A024R7F8', 'A0A024R127')
+ageing_proteins_ids_disorder <- ageing_proteins_ids %>% filter(! `Uniprot entry` %in% missing_uniprot_ids)
+
+disorder_df <- predict_disorder_scores(ageing_proteins_ids_disorder$`Uniprot entry`)
+```
+
+**Python scripts**
+
+-   A Python script was used to calculate the stability scores for all of the proteins using IUPred3.
+
+-   `IUPred_score_calc_frac` was used to calculate the score as the number of amino acids above the threshold (0.5 was used since this was the default) over the total number of amino acids.
+
+-   `iupred.slurm` was used to run the file on the HPC.
+
+-   `uniprot_ids_proteins.tsv` was the input file used. It contains the list of all the proteins that are present in the re-analysed dataset. \[18929 proteins\]
 
 # Distribution of IUPred3 scores
 
@@ -128,14 +185,14 @@ df <- human_ptms_iupred %>%
     TRUE ~ "1+"
   )) 
 
-mean_counts_per_mt_group <- df %>%
+mean_counts_per_ratio_group <- df %>%
   group_by(Uniprot_entry_name, ratio_group) %>%
   summarize(sum_ptms = sum(counts_norm_abund_len)) %>% 
   filter(!ratio_group == '-') %>%
   distinct() %>% group_by(ratio_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
 
 # Plot bar chart
-ggplot(mean_counts_per_mt_group, aes(x = ratio_group, y = mean_ptms_group)) +
+ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group)) +
   geom_col(fill = '#919191') +
   scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) +
   scale_y_continuous(labels = scales::label_number(scale = 1)) +
@@ -147,51 +204,141 @@ ggplot(mean_counts_per_mt_group, aes(x = ratio_group, y = mean_ptms_group)) +
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
-There is also an R package that can be used to calculate the IUPred score, however it uses the old version of IUPred and it also takes a very long time to load. (Though the Python script also took \~ 7 hours to execute)
-
-[IUPred Vignette (bioconductor.org)](https://bioconductor.org/packages/release/bioc/vignettes/idpr/inst/doc/iupred-vignette.html)
-
 ```{r}
-#| eval: false
-#| echo: false
-# this uses the R package for IUPRED2. The REST API was used bcs it uses the latest version of IUPRED so more proteins are recognised + it is faster. 
-#uniprot_ids <- c('P01023', 'P42684', 'Q9BYF1')
+df <- human_ptms_iupred %>%
+  mutate(ratio_group = case_when(
+    Ratio_Above_0.5 <= 0.2 ~ "0 - 0.2",
+    Ratio_Above_0.5 <= 0.4 ~ "0.2 - 0.4",
+    Ratio_Above_0.5 <= 0.6 ~ "0.4 - 0.6",
+    Ratio_Above_0.5 <= 0.8 ~ "0.6 - 0.8",
+    Ratio_Above_0.5 <= 1 ~ "0.8 - 1.0",
+    TRUE ~ "1+"
+  )) %>%
+    mutate(mod_group = case_when(
+    unimod_id == 1 ~'Acetylated',
+    unimod_id == 34 ~'Methylated',
+    TRUE ~ "-"
+  )) 
 
-predict_disorder_scores <- function(uniprot_ids) {
-  disorder_scores <- c()
-  
-  for (id in uniprot_ids) {
-    disorder_df <- iupred(
-      id,
-      iupredType = "long",
-      plotResults = F,
-      proteinName = NA
-    )
-    
-    disorder_score <-
-      disorder_df %>% summarise(mean_score = mean(IUPred2))
-    disorder_scores <- append(disorder_scores, disorder_score[1, 1])
-    
-  }
-  
-  disorder_df <-
-    data.frame(uniprot_id = uniprot_ids, disorder_score = disorder_scores)
-  
-  return(disorder_df)
-}
+mean_counts_per_ratio_group <- df %>%
+  group_by(Uniprot_entry_name, mod_group) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len), ratio_group) %>% 
+  filter(!mod_group == '-') %>%
+  distinct() %>% group_by(mod_group, ratio_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
 
-missing_uniprot_ids <- c('A0A024R7F8', 'A0A024R127')
-ageing_proteins_ids_disorder <- ageing_proteins_ids %>% filter(! `Uniprot entry` %in% missing_uniprot_ids)
+mod_group_colours <- c('Acetylated' = '#8dd3c7', 'Methylated' = '#80b1d3')
 
-disorder_df <- predict_disorder_scores(ageing_proteins_ids_disorder$`Uniprot entry`)
+# Plot bar chart
+ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fill = mod_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) +
+  scale_fill_manual(values = mod_group_colours) +
+  labs(x = "Melting temperature (°C)",
+       y = "Mean normalised counts (scaled by 1e4)") +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 16, family = "Lato"),
+        legend.position = c(0.7,0.92), 
+        legend.direction = 'horizontal',
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
 ```
 
-# Python scripts
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+ubi_prot <- human_complete %>% filter(unimod_id == 121) %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+df <- rbind(human_ptms_iupred, ubi_prot)
 
--   A Python script was used to calculate the stability scores for all of the proteins using IUPred3.
+a <- human_complete %>% filter(unimod_id %in% c(lysine_acylation, AGE)) %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+df <- rbind(df, a)
 
--   `IUPred_score_calc_frac` was used to calculate the score as the number of amino acids above the threshold (0.5 was used since this was the default) over the total number of amino acids.
+df <- df %>%
+  mutate(ratio_group = case_when(
+    Ratio_Above_0.5 <= 0.2 ~ "0 - 0.2",
+    Ratio_Above_0.5 <= 0.4 ~ "0.2 - 0.4",
+    Ratio_Above_0.5 <= 0.6 ~ "0.4 - 0.6",
+    Ratio_Above_0.5 <= 0.8 ~ "0.6 - 0.8",
+    Ratio_Above_0.5 <= 1 ~ "0.8 - 1.0",
+    TRUE ~ "1+"
+  )) %>%
+  mutate(mod_group = case_when(
+    unimod_id == 121 ~'Ubiquitinated',
+    unimod_id %in% AGE ~ 'AGE',
+    (unimod_id %in% lysine_acylation & ptm_res == 'K') ~ 'K acylation',
+    TRUE ~ "-"
+  ))
 
--   `iupred.slurm` was used to run the file on the HPC.
+mean_counts_per_ratio_group <- df %>%
+  group_by(Uniprot_entry_name, mod_group) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len), ratio_group) %>% 
+  filter(!mod_group == '-') %>%
+  distinct() %>% group_by(mod_group, ratio_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
 
--   `uniprot_ids_proteins.tsv` was the input file used. It contains the list of all the proteins that are present in the re-analysed dataset. \[18929 proteins\]
+mod_group_colours <- c('AGE' = '#fccde5', 'Ubiquitinated' = '#bebada', 'K acylation' = '#fb8072')
+
+# Plot bar chart
+ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fill = mod_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) +
+  scale_fill_manual(values = mod_group_colours) +
+  labs(x = "Melting temperature (°C)",
+       y = "Mean normalised counts (scaled by 1e4)") +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 16, family = "Lato"),
+        legend.position = c(0.5,0.9), 
+        legend.direction = 'horizontal',
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
+```
+
+```{r}
+#| echo: false 
+#| warning: false 
+#| message: false
+
+oxptms_prot <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id) %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID')) %>% filter(!ptm_class == 'Post-translational') 
+df <- rbind(human_ptms_iupred, oxptms_prot)
+
+df <- df %>% 
+  mutate(ratio_group = case_when( 
+    Ratio_Above_0.5 <= 0.2 ~ "0 - 0.2", 
+    Ratio_Above_0.5 <= 0.4 ~ "0.2 - 0.4", 
+    Ratio_Above_0.5 <= 0.6 ~ "0.4 - 0.6", 
+    Ratio_Above_0.5 <= 0.8 ~ "0.6 - 0.8", 
+    Ratio_Above_0.5 <= 1 ~ "0.8 - 1.0", 
+    TRUE ~ "1+" 
+    )) %>% 
+  mutate(mod_group = case_when( 
+    unimod_id == 21 ~'Phosphorylated', 
+    (unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) ~ 'oxPTMs',
+    TRUE ~ "-" ))
+
+mean_counts_per_ratio_group <- df %>% 
+  group_by(Uniprot_entry_name, mod_group) %>% 
+  summarize(sum_ptms = sum(counts_norm_abund_len), ratio_group) %>% 
+  filter(!mod_group == '-') %>% 
+  distinct() %>% 
+  group_by(mod_group, ratio_group) %>% 
+  summarise(mean_ptms_group = mean(sum_ptms))
+
+mod_group_colours <- c('Phosphorylated' = '#b3de69', 'oxPTMs' = '#fdb462')
+
+# Plot bar chart
+
+ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fill = mod_group)) + 
+  geom_bar(stat = "identity", position = 'dodge') + 
+  scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) + 
+  scale_y_continuous(labels = scales::label_number(scale = 1e4)) + 
+  scale_fill_manual(values = mod_group_colours) + 
+  labs(x = "Melting temperature (°C)", y = "Mean normalised counts (scaled by 1e4)") + 
+  theme_classic() + 
+  theme(legend.title = element_blank(), 
+        legend.text = element_text(size = 16, family = "Lato"), 
+        legend.position = c(0.65,0.93), 
+        legend.direction = 'horizontal', 
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```

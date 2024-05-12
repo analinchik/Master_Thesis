@@ -30,8 +30,6 @@ human_df <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/20240321-all
 human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv", header = T, sep = '\t')
 
 human_ptms <- human_df %>% filter(ptm_class == 'Post-translational')
-
-#human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
 ```
 
 # Exploration of the complete dataset
@@ -47,7 +45,8 @@ human_ptms <- human_df %>% filter(ptm_class == 'Post-translational')
 How many projects were analysed:
 
 ```{r}
-human_df %>% distinct(project_id)
+#| echo: false
+human_df %>% distinct(project_id) %>% dim()
 ```
 
 ## General questions
@@ -61,16 +60,16 @@ What are the most common classes of modifications?
 human_df %>% group_by(ptm_class) %>% 
   summarise(total_counts = sum(total_counts)) %>%
   ggplot(aes(x = reorder(ptm_class, total_counts), y = total_counts)) +
-  geom_histogram(stat = 'identity', fill = '#73BFB8') +
+  geom_histogram(stat = 'identity', fill = '#919191') +
   scale_y_continuous(labels = scales::label_number(scale = 0.000001)) +
-  labs(y = 'PSMs counts in millions', x = 'Modification classes')+
+  labs(y = 'PSM counts in millions', x = 'Modification classes')+
   coord_flip() +
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 11, family = "Lato"),
         legend.position = c(0.8,0.9), 
-        axis.text = element_text(size = 12, family = "Lato"),  
-        axis.title = element_text(size = 12, family = "Lato"))
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
 ```
 
 How many unique proteins are there?
@@ -114,7 +113,7 @@ ptms_per_project <- human_ptms %>%
   summarise(total_counts = sum(total_counts)) %>% arrange(desc(total_counts))
 
 ggplot(ptms_per_project[1:10,], aes(x = reorder(project_id, total_counts), y = total_counts)) +
-  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  geom_bar(stat = 'identity', fill = '#919191') +
   scale_y_continuous(labels = scales::label_number(scale = 0.000001)) +
   coord_flip()+
   labs(y ='Number of PSM counts in millions', x = 'Project ID')+
@@ -138,7 +137,7 @@ df2 <- human_complete %>% group_by(raw_files_counts) %>%
 df <- rbind(df1, df2)
 
 ggplot(df, aes(x = category, y = total_counts)) +
-  geom_boxplot(outliers = T, fill = '#73BFB8') +
+  geom_boxplot(outliers = T, fill = '#919191') +
   scale_y_continuous(labels = scales::label_number(scale = 0.000001)) +
   labs(y = 'PSM counts in millions') +
   theme_classic() +
@@ -151,6 +150,36 @@ ggplot(df, aes(x = category, y = total_counts)) +
   
 #print('Outliers')
 outliers <- boxplot.stats(df$total_counts)$out
+print(outliers) # these the the PTM counts that were excluded
+length(outliers)
+```
+
+What is the distribution of abundances?
+
+```{r}
+ 
+d <- human_complete %>% 
+  dplyr::select(Uniprot_entry_name, abundance) %>% 
+  distinct() 
+
+ggplot(d,aes(y = abundance)) +
+  geom_boxplot(outliers = F, fill = '#919191') +
+  labs(y = 'PSM counts in millions') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.text = element_text(size = 11, family = "Lato"),
+        axis.text = element_text(size = 11, family = "Lato"),  
+        axis.title = element_text(size = 11, family = "Lato"))
+
+
+```
+
+How many outliers are there?
+
+```{r}
+outliers <- boxplot.stats(d$abundance)$out
 print(outliers) # these the the PTM counts that were excluded
 length(outliers)
 ```
@@ -198,7 +227,7 @@ human_ptms_grouped_ptm <- human_ptms %>%
   arrange(desc(total_counts))
 
 ggplot(human_ptms_grouped_ptm[1:10,], aes(x = reorder(ptm_name, total_counts), y = total_counts)) +
-  geom_bar(stat = "identity", fill = '#73BFB8') +
+  geom_bar(stat = "identity", fill = '#919191') +
   scale_y_continuous(labels = scales::label_number(scale = 0.000001)) +
   coord_flip()+
   labs(y ='Number of PSM counts in millions', x = 'Post-translational modifications')+
@@ -231,7 +260,7 @@ sum_AA_mod <- human_ptms %>% group_by(ptm_res) %>%
   summarise(total_counts = sum(total_counts))
 
 ggplot(sum_AA_mod, aes(x = reorder(ptm_res, -total_counts), y = total_counts)) +
-  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  geom_bar(stat = 'identity', fill = '#919191') +
   scale_y_continuous(labels = scales::label_number(scale = 0.000001)) +
   labs(x = 'Residue' , y = 'PSM counts in millions') +
   theme_classic()
@@ -250,7 +279,7 @@ diff_PTMs_AA <- human_ptms %>%
   summarise(diff_PTMs = n())
 
 ggplot(diff_PTMs_AA, aes(x = reorder(ptm_res, -diff_PTMs), y = diff_PTMs)) +
-  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  geom_bar(stat = 'identity', fill = '#919191') +
   labs(x = 'Residue' , y = 'Number of different PTMs') +
   theme_classic()
 ```
@@ -288,7 +317,7 @@ per_protein_ptms <- human_ptms %>%
   summarise(total_counts = sum(total_counts)) %>% arrange(desc(total_counts))
 
 ggplot(per_protein_ptms[1:10,], aes(x = reorder(LeadEntry, total_counts), y = total_counts)) +
-  geom_bar(stat = 'identity', fill = '#73BFB8') +
+  geom_bar(stat = 'identity', fill = '#919191') +
   scale_y_continuous(labels = scales::label_comma(scale = 0.001)) +
   coord_flip()+
   labs(y ='Number of PSM counts in thousands', x = 'UniProt entry name')+

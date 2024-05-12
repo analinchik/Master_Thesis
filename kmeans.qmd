@@ -1,0 +1,227 @@
+---
+title: "K means clustering"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| include: false
+
+# Load the packages
+library(factoextra)
+library(tidyverse)
+library(cluster)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(scales)
+library(stringr)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+# THIS LOADS THE NEW DATASET
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv", header = T, sep = '\t')
+
+human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
+
+# convertion
+leadprot_uniprot <- human_complete %>% dplyr::select(Uniprot_entry_name, LeadProt) %>% distinct()
+
+# IUPRED SCORES
+iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
+
+human_ptms_iupred <- inner_join(human_ptms, iupred_scores, by = join_by('LeadProt' =='UniProt_ID'))
+
+# MODIFICATIONS
+lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
+AGE <- c(6, 907, 378)
+
+oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
+oxPTMs <- oxPTMs %>%
+  mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
+
+# AGEING SCORE
+
+age_proteins <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/aging_labels.csv', header = T)
+age_scores <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/Final_32_features.csv-XGBoost_CV_preds-n_est50-exp20.csv', header = T)
+
+age_proteins$ageing_score <- age_scores$preds
+names(age_proteins) <- c('Uniprot_entry_name', 'GenAge', 'ageing_score')
+
+# MT
+
+mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
+mt <- separate_rows(mt, Protein_ID, sep = ";")
+mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
+
+# HL
+
+short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`) %>% rename(LeadProt = `Uniprot ID`, mean_hl_hours = `Half-life`)
+
+long_lived_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_grouped.tsv', sep = '\t', header = T)
+
+shared <- inner_join(short_lived_proteins_hl, long_lived_proteins_hl, by = join_by(LeadProt))
+short_lived_proteins_hl <- short_lived_proteins_hl %>% filter(!LeadProt %in% shared$LeadProt)
+long_lived_proteins_hl <- long_lived_proteins_hl %>% filter(!LeadProt %in% shared$LeadProt)
+hl <- rbind(short_lived_proteins_hl, long_lived_proteins_hl)
+
+```
+
+```{r}
+#| echo: false
+# Getting the modification sums
+
+sum_oxPTMs <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_oxPTMs = sum(counts_norm_abund_len)) 
+
+sum_AGEs <- human_complete %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_AGEs = sum(counts_norm_abund_len)) 
+
+sum_ubiq <- human_complete %>% filter(unimod_id == 121) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_ubiq = sum(counts_norm_abund_len)) 
+
+sum_phospho <- human_ptms %>% filter(unimod_id == 21) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_phospho = sum(counts_norm_abund_len))
+
+sum_acetyl <- human_ptms %>% filter(unimod_id == 1) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_acetyl = sum(counts_norm_abund_len))
+
+sum_meth <- human_ptms %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_meth = sum(counts_norm_abund_len))
+
+sum_Kacyl <- human_ptms %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_Kacyl = sum(counts_norm_abund_len))
+```
+
+Joining everything:
+
+```{r}
+data <- left_join(leadprot_uniprot, sum_acetyl, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_AGEs, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_Kacyl, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_oxPTMs, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_phospho, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_ubiq, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_meth, by  = join_by(Uniprot_entry_name))
+
+data <- left_join(data, age_proteins, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, mt, by  = join_by(LeadProt))
+data <- left_join(data, hl, by  = join_by(LeadProt))
+data <- left_join(data, iupred_scores, by  = join_by('LeadProt' == 'UniProt_ID'))
+```
+
+```{r}
+# filling with 0s
+
+# List of column names where you want to replace NA with 0
+columns_to_replace <- c("sum_AGEs", "sum_acetyl", "sum_Kacyl", "sum_oxPTMs", "sum_phospho",  "sum_ubiq", "sum_meth")
+
+# Replace NA with 0 in the specified columns
+data[columns_to_replace] <- lapply(data[columns_to_replace], function(x) { x[is.na(x)] <- 0; return(x) })
+```
+
+```{r}
+
+df <- data %>% dplyr::select("Uniprot_entry_name", "sum_AGEs", "sum_acetyl", "sum_Kacyl", "sum_oxPTMs", "sum_phospho",  "sum_ubiq", "sum_meth", "ageing_score", "mean_hl_hours", "mean_mt", "Ratio_Above_0.5")
+column_names <- c("sum_AGEs", "sum_acetyl", "sum_Kacyl", "sum_oxPTMs", "sum_phospho",  "sum_ubiq", "sum_meth", "ageing_score", "mean_hl_hours", "mean_mt", "ratio")
+rows <- df$Uniprot_entry_name
+df <- data.frame(df, row.names = rows)
+df <- df %>% select(-Uniprot_entry_name)
+names(df) <- column_names
+
+df_complete <- na.omit(df)
+# Optionally, normalize the data
+df <- scale(df_complete)
+
+#distance <- dist(df)
+#dist_matrix <- as.matrix(distance)
+#heatmap(dist_matrix)
+
+distance <- get_dist(df)
+fviz_dist(distance, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))
+
+# Calculate the total within-cluster sum of squares for different numbers of clusters
+#wss <- function(k) {
+ # kmeans(df, k, nstart = 10)$tot.withinss
+#}
+
+# Compute and plot the WSS for k = 1 to 10
+#k.values <- 1:20
+#wss.values <- sapply(k.values, wss)
+
+#plot(k.values, wss.values, type = "b", pch = 19, frame = FALSE,
+ #    xlab = "Number of clusters (k)",
+  #   ylab = "Total within-cluster sum of squares")
+
+set.seed(123)
+
+fviz_nbclust(df, kmeans, method = "wss", k.max = 25)
+
+# Set the number of clusters
+num_clusters <- 9
+
+# Perform k-means clustering
+kmeans_result <- kmeans(df, centers = num_clusters, nstart = 25)
+
+# View the results
+print(kmeans_result)
+
+
+# Using factoextra to visualize clusters
+fviz_cluster(kmeans_result, data = df)
+
+```
+
+```{r}
+library(cluster)
+sil_scores <- silhouette(kmeans_result$cluster, dist(df))
+
+# Create a data frame from the silhouette object
+sil_df <- data.frame(cluster = sil_scores[, 1],
+                     silhouette_width = sil_scores[, 3])
+
+# Adding an identifier for each point
+sil_df$id <- seq_along(sil_df$silhouette_width)
+sil_df$cluster <- as.factor(sil_df$cluster)
+sil_df %>% arrange(cluster) %>% 
+  ggplot(aes(x = id, y = silhouette_width, fill = cluster)) +
+  geom_col() +
+  coord_flip() +  # Flips the axes for better visualization
+  labs(x = "Data Point", y = "Silhouette Width",
+       fill = "Cluster", title = "Silhouette Plot of Clustering") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+summary(silhouette_scores)
+plot(silhouette_scores)
+```
+
+Getting the cluster members:
+
+```{r}
+clusters <- kmeans_result$cluster
+# Create a data frame with cluster assignments
+df_with_clusters <- data.frame(df, Cluster = clusters)
+
+# Get members of Cluster 1
+cluster1 <- df_with_clusters[df_with_clusters$Cluster == 1, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster2 <- df_with_clusters[df_with_clusters$Cluster == 2, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster3 <- df_with_clusters[df_with_clusters$Cluster == 3, ] %>%
+  rownames_to_column(var = "UniProt")
+```

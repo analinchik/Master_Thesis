@@ -42,7 +42,6 @@ oxPTMs <- oxPTMs %>%
   mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
 
 mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
-
 mt <- separate_rows(mt, Protein_ID, sep = ";")
 mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
 
@@ -59,22 +58,6 @@ The melting temperatures were obtained from:
 Langenberg, Tobias, et al. 'Thermodynamic and Evolutionary Coupling between the Native and Amyloid State of Globular Proteins'. *Cell Reports*, vol. 31, no. 2, Apr. 2020, p. 107512. *DOI.org (Crossref)*, https://doi.org/10.1016/j.celrep.2020.03.076.
 
 It is better to plot these as 2 overlaying density plots.
-
-```{r}
-#| echo: false
-#| warning: false
-ggplot() +
-  geom_density(data = mt, aes(x = mean_mt, fill = 'Data found by Langenberg et al.'), alpha = 0.7, bw = 0.6) +
-  geom_density(data = ptms_mt, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'Re-processed dataset'), alpha = 0.7, bw = 0.6) + 
-  labs(x = 'Melting temperature (°C)', y = 'Density') +
-  theme_classic() +
-  scale_fill_manual(values = c("white", '#919191'),breaks = c('Data found by Langenberg et al.', 'Re-processed dataset')) +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 13, family = "Lato"),
-        legend.position = c(0.28,0.9), 
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
-```
 
 ## Outliers
 
@@ -116,21 +99,22 @@ outliers <- data %>%
 ptms_mt <- ptms_mt %>% filter(!Uniprot_entry_name %in% outliers$Uniprot_entry_name)
 ```
 
-Check that the outliers have been removed.
+Check that the outliers have been removed. (Can't do this bcs you will just find more outliers.)
+
+Distributions (with the outliers removed).
 
 ```{r}
 #| echo: false
-ptms_mt %>% group_by(LeadProt) %>% 
-  summarise(sum = log10(sum(counts_norm_abund_len))) %>%
-  ggplot(aes(sum)) +
-  geom_boxplot() +
-  labs(x = 'Log of the sum of normalised counts')+
+#| warning: false
+ggplot() +
+  geom_density(data = mt, aes(x = mean_mt, fill = 'Data found by Langenberg et al.'), alpha = 0.7, bw = 0.6) +
+  geom_density(data = ptms_mt, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'Re-processed dataset'), alpha = 0.7, bw = 0.6) + 
+  labs(x = 'Melting temperature (°C)', y = 'Density') +
   theme_classic() +
+  scale_fill_manual(values = c("white", '#919191'),breaks = c('Data found by Langenberg et al.', 'Re-processed dataset')) +
   theme(legend.title = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
         legend.text = element_text(size = 13, family = "Lato"),
-        legend.position = c(0.8,0.9), 
+        legend.position = c(0.28,0.9), 
         axis.text = element_text(size = 13, family = "Lato"),  
         axis.title = element_text(size = 13, family = "Lato"))
 ```
@@ -164,13 +148,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.5)) +
   scale_fill_manual(values = c("white", '#b3de69')) +
-  labs(y = 'Mean half-lives')+
+  labs(y = 'Melting temperature (°C)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 18, family = "Lato"),  
+        axis.title = element_text(size = 18, family = "Lato"))
 ```
 
 Wilcoxon test (note that the sample sizes are uneven). The p value was adjusted uisng the formula p/sqrt(N/100), where N = n1+ n2
@@ -214,13 +198,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#8dd3c7')) +
-  labs(y = 'Mean half-lives')+
+  labs(y = 'Melting temperature (°C)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 18, family = "Lato"),  
+        axis.title = element_text(size = 18, family = "Lato"))
 ```
 
 ```{r}
@@ -266,13 +250,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#bebada')) +
-  labs(y = 'Mean half-lives')+
+  labs(y = 'Melting temperature (°C)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 18, family = "Lato"),  
+        axis.title = element_text(size = 18, family = "Lato"))
 ```
 
 ```{r}
@@ -315,13 +299,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#80b1d3')) +
-  labs(y = 'Mean half-lives')+
+  labs(y = 'Melting temperature (°C)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 18, family = "Lato"),  
+        axis.title = element_text(size = 18, family = "Lato"))
 ```
 
 ```{r}
@@ -362,13 +346,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#fdb462')) +
-  labs(y = 'Mean half-lives')+
+  labs(y = 'Melting temperature (°C)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 18, family = "Lato"),  
+        axis.title = element_text(size = 18, family = "Lato"))
 ```
 
 ```{r}
@@ -408,13 +392,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#fb8072')) +
-  labs(y = 'Mean half-lives')+
+  labs(y = 'Melting temperature (°C)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 18, family = "Lato"),  
+        axis.title = element_text(size = 18, family = "Lato"))
 ```
 
 ```{r}
@@ -454,13 +438,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_mt, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_mt, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#fccde5')) +
-  labs(y = 'Mean half-lives')+
+  labs(y = 'Melting temperature (°C)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 18, family = "Lato"),  
+        axis.title = element_text(size = 18, family = "Lato"))
 ```
 
 ```{r}
@@ -476,6 +460,42 @@ print('P-value cut-off')
 ```
 
 # Binning by MT
+
+General binning where we do not split by the type of modification:
+
+```{r}
+df <- ptms_mt %>%
+  mutate(mt_group = case_when(
+    mean_mt <= 45 ~ "40-45",
+    mean_mt <= 50 ~ "45-50",
+    mean_mt <= 55 ~ "50-55",
+    mean_mt <= 60 ~ "55-60",
+    mean_mt <= 65 ~ "60-65",
+    mean_mt <= 70 ~ "65-70",
+    TRUE ~ "70+"
+  )) 
+
+mean_counts_per_mt_group <- df %>%
+  group_by(Uniprot_entry_name) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len), mt_group) %>% 
+  distinct() %>% group_by(mt_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
+
+# Plot bar chart
+ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group)) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  scale_x_discrete(limits = c("40-45", "45-50", "50-55", "55-60", "60-65", "65-70")) +
+  labs(x = "Melting temperature (°C)",
+       y = "Mean normalised counts") +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 16, family = "Lato"),
+        legend.position = c(0.8,0.92), 
+        legend.direction = 'horizontal',
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
+```
+
+Now need to split up by modification:
 
 ```{r}
 #| echo: false
@@ -516,11 +536,11 @@ ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = m
        y = "Mean normalised counts (scaled by 1e4)") +
   theme_classic() +
   theme(legend.title = element_blank(),
-        legend.text = element_text(size = 13, family = "Lato"),
+        legend.text = element_text(size = 16, family = "Lato"),
         legend.position = c(0.8,0.92), 
         legend.direction = 'horizontal',
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
 ```
 
 ```{r}
@@ -568,11 +588,11 @@ ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = m
        y = "Mean normalised counts (scaled by 1e4)") +
   theme_classic() +
   theme(legend.title = element_blank(),
-        legend.text = element_text(size = 13, family = "Lato"),
+        legend.text = element_text(size = 16, family = "Lato"),
         legend.position = c(0.72,0.9), 
         legend.direction = 'horizontal',
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
 ```
 
 ```{r}
@@ -580,10 +600,10 @@ ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = m
 #| warning: false
 #| message: false
 
-oxptms_prot <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id) %>% inner_join(mt, by = join_by(LeadProt))
+oxptms_prot <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id) %>% inner_join(mt, by = join_by(LeadProt)) %>% filter(!ptm_class == 'Post-translational')
 df <- rbind(ptms_mt, oxptms_prot)
 
-df <- ptms_mt %>%
+df <- df %>%
   mutate(mt_group = case_when(
     mean_mt <= 45 ~ "40-45",
     mean_mt <= 50 ~ "45-50",
@@ -611,17 +631,17 @@ mod_group_colours <- c('Phosphorylated' = '#b3de69', 'oxPTMs' = '#fdb462')
 ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = mod_group)) +
   geom_bar(stat = "identity", position = 'dodge') +
   scale_x_discrete(limits = c("40-45", "45-50", "50-55", "55-60", "60-65", "65-70")) +
-  scale_y_continuous(labels = scales::label_number(scale = 1e4)) +
+  scale_y_continuous(limits = c(0,0.0065), labels = scales::label_number(scale = 1e4)) +
   scale_fill_manual(values = mod_group_colours) +
   labs(x = "Melting temperature (°C)",
        y = "Mean normalised counts (scaled by 1e4)") +
   theme_classic() +
   theme(legend.title = element_blank(),
-        legend.text = element_text(size = 13, family = "Lato"),
+        legend.text = element_text(size = 16, family = "Lato"),
         legend.position = c(0.75,0.93), 
         legend.direction = 'horizontal',
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
 ```
 
 # Binning by the number of PTMs

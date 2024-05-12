@@ -1,6 +1,14 @@
 ---
 title: "B cells"
-format: html
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
 editor: visual
 ---
 
@@ -19,14 +27,24 @@ library(VennDiagram)
 ```{r}
 #| echo: false
 #| include: false
+
+# hl
 Bcells_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/Bcells_hl.tsv', header = T, sep = '\t')
 
-# This is just a filtered by Post-translational
-human_ptms <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_ptms.tsv", header = T, sep = '\t')
+#THIS LOADS THE NEW DATASET
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv", header = T, sep = '\t')
 
+leadprot_uniprot <- human_complete %>% dplyr::select(Uniprot_entry_name, LeadProt) %>% distinct()
+
+human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
+
+# MODIFICATIONS
 oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
 oxPTMs <- oxPTMs %>%
   mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
+
+lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
+AGE <- c(6, 907, 378)
 ```
 
 cytoplasmic projects:
@@ -44,14 +62,289 @@ nuclear proteins:
 ```{r}
 #| echo: false
 
-human_ptms_cyto_old_hl <- human_ptms %>% filter(project_id == 'PXD006570') %>%
+human_ptms_cyto_old <- human_complete %>% filter(project_id == 'PXD006570')
+human_ptms_cyto_young <- human_complete %>% filter(project_id == 'PXD006572')
+
+human_ptms_nuc_old <- human_complete %>% filter(project_id == 'PXD006571') 
+human_ptms_nuc_young <- human_complete %>% filter(project_id == 'PXD006576')
+```
+
+# Histones
+
+Methylation of histones. Do histones get more methylised as we age? compare the mean of the sum of modifications of histones in young and old cells. Do this for cytoplasmic and nuclear proteins.
+
+Where are the histones from?
+
+```{r}
+histones <- read.csv(file = '/Users/anastasialinchik/Downloads/idmapping_2024_04_30.tsv', header = T, sep = '\t')
+histones
+human_ptms_cyto_old %>% filter(LeadProt %in% histones$Entry)
+human_ptms_cyto_young %>% filter(LeadProt %in% histones$Entry)
+
+histones_mod_old <- human_ptms_nuc_old %>% filter(LeadProt %in% histones$Entry)
+histones_mod_young <- human_ptms_nuc_young %>% filter(LeadProt %in% histones$Entry)
+```
+
+## Methylation
+
+```{r}
+
+df2 <- histones_mod_young %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'young')
+df1 <- histones_mod_old %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme()
+```
+
+```{r}
+wilcox.test(df1$sum, df2$sum)
+```
+
+## All modifications
+
+(maybe it would be better to look a)
+
+What about modifications in histones in general? Not just methylation? Use only the nuclear groups bcs histones are obviously in the nucleus.
+
+```{r}
+df2 <- histones_mod_young %>% filter(ptm_class == 'Post-translational') %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'young')
+df1 <- histones_mod_old %>% filter(ptm_class == 'Post-translational') %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme()
+```
+
+```{r}
+wilcox.test(df1$sum, df2$sum)
+```
+
+# Enriched PTMs
+
+Which PTMs are enriched in old cells compared to new?
+
+```{r}
+df1 <- histones_mod_young %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len))
+
+df2 <- histones_mod_old %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len))
+
+df3 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  filter(sum_old > sum_young) %>%
+  mutate(change = sum_old/sum_young)
+```
+
+```{r}
+ggplot(df3, aes(y = reorder(ptm_name, change), x = change)) +
+  geom_col() +
+  labs(y = 'PTMs', x = 'Fold change') +
+  theme_classic()
+```
+
+# Chaperones
+
+## oxPTMs
+
+Repressed chaperones get more oxPTMs?
+
+```{r}
+
+all_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/all_chaperones.xlsx', sheet = 'BREHME_TABLE S2A', skip = 8)
+
+repressed_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3D', skip = 19)
+repressed_chaperones <- separate_wider_delim(repressed_chaperones, col = 'Label [Family]', names = c("gene_name", "family"), delim = " ")
+repressed_chaperones <- inner_join(repressed_chaperones, all_chaperones, by = join_by('Entrez-ID'))
+
+induced_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3E', skip = 19)
+induced_chaperones <- separate_wider_delim(induced_chaperones, col = 'Label [Family]', names = c("gene_name", "family"), delim = " ")
+induced_chaperones <- inner_join(induced_chaperones, all_chaperones, by = join_by('Entrez-ID'))
+```
+
+Do aged chaperones have more oxPTMs than non-aged?
+
+```{r}
+df1 <- human_ptms_nuc_young %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_ptms_nuc_old %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme()
+```
+
+```{r}
+wilcox.test(df1$sum, df2$sum)
+```
+
+## AGEs
+
+NOT FOUND
+
+## Oxidation
+
+```{r}
+df1 <- human_ptms_cyto_young %>% 
+  filter(unimod_id == 35) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_ptms_cyto_old %>% 
+  filter(unimod_id == 35) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme()
+```
+
+```{r}
+wilcox.test(df1$sum, df2$sum)
+```
+
+# Fold change
+
+```{r}
+df1 <- human_ptms_cyto_young %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum =sum(counts_norm_abund_len))
+
+df2 <- human_ptms_cyto_old %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum =sum(counts_norm_abund_len))
+
+df3 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
+  filter(sum_old > sum_young) %>%
+  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
+  arrange(desc(change))
+```
+
+```{r}
+write.table(df3$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/enriched.tsv', row.names = F, sep="\t", quote = F)
+```
+
+This list can be used for DAVID to check for significant enrichment of GO terms.
+
+# K-means prep
+
+Need the following columns in a dataframe:
+
+-   ageing score
+
+-   \# of PTM modification counts in cyto young
+
+-   \# of PTM modification counts in cyto old
+
+-   \# of PTM modification counts in nuc young
+
+-   \# of PTM modification counts in nuc old
+
+-   percentage of all modifications that are oxPTMs
+
+-   percentage of all modifications that are AGEs
+
+-   percentage of all modifications that are K acylations
+
+-   percentage of PTMs that are methylations
+
+-   MT
+
+-   IUPred
+
+-   hl
+
+```{r}
+
+# percentages
+
+sum_oxPTMs <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_oxPTMs = sum(counts_norm_abund_len)) 
+totals <- human_complete %>% group_by(Uniprot_entry_name) %>%
+  summarise(totals = sum(counts_norm_abund_len))
+perc_oxPTMs <- inner_join(sum_oxPTMs, totals, by = join_by(Uniprot_entry_name)) %>% mutate(sum_oxPTMs/totals)
+
+
+sum_AGEs <- human_complete %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_AGEs = sum(counts_norm_abund_len)) 
+perc_AGEs <- inner_join(sum_AGEs, totals, by = join_by(Uniprot_entry_name)) %>% mutate(sum_AGEs/totals)
+
+# PTMs numbers
+
+sum_cyto_young <- human_ptms_cyto_young %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_cyto_young = sum(counts_norm_abund_len))
+sum_cyto_old <- human_ptms_cyto_old %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_cyto_old = sum(counts_norm_abund_len))
+
+cyto <- inner_join(sum_cyto_young, sum_cyto_old, by = join_by(Uniprot_entry_name))
+
+sum_nuc_young <-human_ptms_nuc_young %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_nuc_young = sum(counts_norm_abund_len))
+sum_nuc_old <- human_ptms_nuc_old %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_nuc_old = sum(counts_norm_abund_len))
+
+nuc <- inner_join(sum_nuc_young, sum_nuc_old, by = join_by(Uniprot_entry_name))
+
+PTMs <- inner_join(nuc, cyto, by = join_by(Uniprot_entry_name))
+# ageing score
+
+age_proteins <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/aging_labels.csv', header = T)
+age_scores <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/Final_32_features.csv-XGBoost_CV_preds-n_est50-exp20.csv', header = T)
+
+age_proteins$score <- age_scores$preds
+names(age_proteins) <- c('Uniprot_entry_name', 'GenAge', 'score')
+
+# hl
+Bcells_hl_uni <- inner_join(Bcells_hl, leadprot_uniprot, by = join_by('LeadProt'))
+
+# MT
+mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
+
+mt <- separate_rows(mt, Protein_ID, sep = ";")
+mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
+
+# IUPred
+iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
+
+data <- inner_join(perc_oxPTMs, PTMs, by = join_by(Uniprot_entry_name))
+data <- inner_join(data, age_proteins, by = join_by(Uniprot_entry_name))
+data <- inner_join(data, Bcells_hl_uni, by = join_by(Uniprot_entry_name))
+data <- inner_join(data, mt, by = join_by(LeadProt))
+data <- inner_join(data, iupred_scores, by = join_by(LeadProt == 'UniProt_ID'))
+```
+
+# Half-lives
+
+```{r}
+#| echo: false
+
+human_ptms_cyto_old_hl <- human_ptms_cyto_old %>% 
   inner_join(Bcells_hl, by = join_by(LeadProt))
-human_ptms_cyto_young_hl <- human_ptms %>% filter(project_id == 'PXD006572') %>%
+human_ptms_cyto_young_hl <- human_ptms_cyto_young %>% 
   inner_join(Bcells_hl, by = join_by(LeadProt))
 
-human_ptms_nuc_old_hl <- human_ptms %>% filter(project_id == 'PXD006571') %>%
+human_ptms_nuc_old_hl <- human_ptms_nuc_old %>% 
   inner_join(Bcells_hl, by = join_by(LeadProt))
-human_ptms_nuc_young_hl <- human_ptms %>% filter(project_id == 'PXD006576') %>%
+human_ptms_nuc_young_hl <- human_ptms_nuc_young %>% 
   inner_join(Bcells_hl, by = join_by(LeadProt))
 ```
 
@@ -193,35 +486,6 @@ ggplot() +
   scale_fill_manual(values = c('nuc_old' = '#2364AA', 'nuc_young' = '#5DB7B1'), name = 'Legend') +
   scale_x_continuous(limits = c(0,350)) +
   theme_classic()
-```
-
-```{r}
-df1 <- human_ptms_cyto_old_hl %>% filter(LeadProt %in% cyto_both$LeadProt)
-df2 <- human_ptms_nuc_old_hl %>% filter(LeadProt %in% nuc_both$LeadProt)
-
-df3 <- human_ptms_cyto_young_hl %>% filter(LeadProt %in% cyto_both$LeadProt)
-df4 <- human_ptms_nuc_young_hl %>% filter(LeadProt %in% nuc_both$LeadProt)
-
-old <- rbind(df1, df2) %>%
-  group_by(LeadProt) %>%
-  summarise(total_count = sum(norm_counts))
-young <- rbind(df3, df4) %>%
-  group_by(LeadProt) %>%
-  summarise(total_count = sum(norm_counts))
-
-# Combine the dataframes
-combined_data <- merge(old, young, by = "LeadProt", suffixes = c(".Group1", ".Group2"))
-
-# Function to perform t-test and return the p-value
-perform_t_test <- function(row) {
-  t_test_result <- t.test(c(row["Counts.Group1"]), c(row["Counts.Group2"]), alternative = "two.sided")
-  return(t_test_result$p.value)
-}
-
-# Apply the function to each row
-combined_data$PValue <- apply(combined_data, 1, perform_t_test)
-
-
 ```
 
 ```{r}
@@ -423,13 +687,13 @@ ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = ag
 The more modified proteins vs less modified proteins depending on the age.
 
 ```{r}
-human_cyto_old <- human_new %>%
+human_cyto_old <- human_complete %>%
   filter(project_id == 'PXD006570') 
 
-human_cyto_young <- human_new %>%
+human_cyto_young <- human_complete %>%
   filter(project_id == 'PXD006572') 
 
-df1 <- human_cyto_old
+df1 <- human_cyto_old 
 df2 <- human_cyto_young
 
 # Aggregating normalized counts for df1
@@ -469,10 +733,10 @@ write.table(file = '/Users/anastasialinchik/Downloads/ids.tsv', row.names = F, s
 The up/down regulated modifications
 
 ```{r}
-human_cyto_old <- human_new %>%
+human_cyto_old <- human_complete %>%
   filter(project_id == 'PXD006570') %>% filter(ptm_class== 'Post-translational')
 
-human_cyto_young <- human_new %>%
+human_cyto_young <- human_complete %>%
   filter(project_id == 'PXD006572') %>% filter(ptm_class== 'Post-translational')
 
 df1 <- human_cyto_old
@@ -510,7 +774,7 @@ ggplot(df, aes(x = log_fold, y = ptm_name)) +
 ## Chaperones
 
 ```{r}
-all_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/all_chaperones.xls', sheet = 'BREHME_TABLE S2A', skip = 8, col_names = T) %>% dplyr::select(`Entrez-ID`, `Uniprot`) %>% separate_rows(Uniprot, sep = "; ") 
+all_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/all_chaperones.xlsx', sheet = 'BREHME_TABLE S2A', skip = 8, col_names = T) %>% dplyr::select(`Entrez-ID`, `Uniprot`) %>% separate_rows(Uniprot, sep = "; ") 
 
 cols <- c('Entry#', 'Label [Family]', 'Age-correlation', 'p-val', 'col5', 'col6', 'col7', 'col8', 'col9', 'col10')
 repressed_chap <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3D', skip = 20, col_names = cols) %>% dplyr::select('Entry#', 'p-val') %>% inner_join(all_chaperones, by = join_by('Entry#' == 'Entrez-ID'))
@@ -518,13 +782,41 @@ repressed_chap <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA
 induced_chap <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3E', skip = 19, col_names = T) %>% dplyr::select(`Entrez-ID`) %>% inner_join(all_chaperones, by = 'Entrez-ID')
 ```
 
-```{r}
-vec1 <- merged_data %>% filter(log_fold > 1) %>% dplyr:: select(LeadEntry) 
+Does the mean sum of the modifications in young vs old significant?
 
-inner_join(vec1, repressed_chap, by = join_by('LeadEntry' == 'Uniprot'))
+-   the total modificaitons are significantly different but not post-translational
+
+```{r}
+df1 <- human_ptms_cyto_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'young')
+df2 <- human_ptms_cyto_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name) %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'old')
+
+wilcox.test(df1$sum_mod, df2$sum_mod)
 ```
 
 ```{r}
-cyto<- rbind(human_cyto_old, human_cyto_young)
-inner_join(all_chaperones, cyto, by = join_by('Uniprot' == 'LeadEntry'))
+
+df3 <- rbind(df1,df2)
+ggplot(df3, aes(x = group, y = sum_mod)) +
+  geom_boxplot(outliers = F)
+```
+
+```{r}
+df1 <- human_ptms_nuc_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'young')
+df2 <- human_ptms_nuc_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name) %>%
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'old')
+
+wilcox.test(df1$sum_mod, df2$sum_mod)
+```
+
+```{r}
+df3 <- rbind(df1,df2)
+ggplot(df3, aes(x = group, y = sum_mod)) +
+  geom_boxplot(outliers = F)
 ```
