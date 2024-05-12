@@ -854,7 +854,7 @@ ggplot(mean_counts_per_mt_group, aes(x = hl_group, y = mean_ptms_group)) +
   geom_bar(stat = "identity", fill = '#919191') +
   scale_x_discrete(limits = c("0-5", "5-10", "10-15", "15-20", "20+")) +
   scale_y_continuous(labels = scales::label_number(scale = 1)) +
-  labs(x = "Proportion of amino acids with a score above 0.5",
+  labs(x = "Half-lives (hours)",
        y = "Mean normalised counts") +
   theme_classic() +
   theme(

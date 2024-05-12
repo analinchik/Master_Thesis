@@ -172,9 +172,13 @@ ggplot(data = df, aes(x = Ratio_Above_0.5, y = sum_norm_counts)) +
 
 # Binning
 
+This is only for PTMs, so the columns don't need to actually add up.
+
 ```{r}
 #| echo: false
 #| message: false
+#| warning: false
+
 df <- human_ptms_iupred %>%
   mutate(ratio_group = case_when(
     Ratio_Above_0.5 <= 0.2 ~ "0 - 0.2",
@@ -186,8 +190,8 @@ df <- human_ptms_iupred %>%
   )) 
 
 mean_counts_per_ratio_group <- df %>%
-  group_by(Uniprot_entry_name, ratio_group) %>%
-  summarize(sum_ptms = sum(counts_norm_abund_len)) %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarize(sum_ptms = sum(counts_norm_abund_len), ratio_group) %>% 
   filter(!ratio_group == '-') %>%
   distinct() %>% group_by(ratio_group) %>% summarise(mean_ptms_group = mean(sum_ptms))
 
@@ -195,7 +199,6 @@ mean_counts_per_ratio_group <- df %>%
 ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group)) +
   geom_col(fill = '#919191') +
   scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) +
-  scale_y_continuous(labels = scales::label_number(scale = 1)) +
   labs(x = "Proportion of amino acids with a score above 0.5",
        y = "Mean normalised counts") +
   theme_classic() +
@@ -205,6 +208,10 @@ ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group)) +
 ```
 
 ```{r}
+#| echo: false 
+#| warning: false 
+#| message: false
+
 df <- human_ptms_iupred %>%
   mutate(ratio_group = case_when(
     Ratio_Above_0.5 <= 0.2 ~ "0 - 0.2",
@@ -233,8 +240,8 @@ ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fi
   geom_bar(stat = "identity", position = 'dodge') +
   scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) +
   scale_fill_manual(values = mod_group_colours) +
-  labs(x = "Melting temperature (°C)",
-       y = "Mean normalised counts (scaled by 1e4)") +
+  labs(x = "Proportion of disordered AAs per protein",
+       y = "Mean normalised counts") +
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 16, family = "Lato"),
@@ -283,12 +290,12 @@ ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fi
   geom_bar(stat = "identity", position = 'dodge') +
   scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) +
   scale_fill_manual(values = mod_group_colours) +
-  labs(x = "Melting temperature (°C)",
-       y = "Mean normalised counts (scaled by 1e4)") +
+  labs(x = "Proportion of disordered AAs per protein",
+       y = "Mean normalised counts") +
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 16, family = "Lato"),
-        legend.position = c(0.5,0.9), 
+        legend.position = c(0.6,0.9), 
         legend.direction = 'horizontal',
         axis.text = element_text(size = 16, family = "Lato"),  
         axis.title = element_text(size = 16, family = "Lato"))
@@ -312,7 +319,6 @@ df <- df %>%
     TRUE ~ "1+" 
     )) %>% 
   mutate(mod_group = case_when( 
-    unimod_id == 21 ~'Phosphorylated', 
     (unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) ~ 'oxPTMs',
     TRUE ~ "-" ))
 
@@ -326,19 +332,72 @@ mean_counts_per_ratio_group <- df %>%
 
 mod_group_colours <- c('Phosphorylated' = '#b3de69', 'oxPTMs' = '#fdb462')
 
-# Plot bar chart
+ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fill = mod_group)) + 
+  geom_bar(stat = "identity", position = 'dodge') + 
+  scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) + 
+  scale_y_continuous(labels = scales::label_number(scale = 1)) + 
+  scale_fill_manual(values = mod_group_colours) + 
+  labs(x = "Proportion of disordered AAs per protein", 
+       y = "Mean normalised counts") + 
+  theme_classic() + 
+  theme(legend.position = 'none', 
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+oxptms_prot <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id) %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID')) %>% filter(!ptm_class == 'Post-translational') 
+df <- rbind(human_ptms_iupred, oxptms_prot)
+
+df <- df %>% 
+  mutate(ratio_group = case_when( 
+    Ratio_Above_0.5 <= 0.2 ~ "0 - 0.2", 
+    Ratio_Above_0.5 <= 0.4 ~ "0.2 - 0.4", 
+    Ratio_Above_0.5 <= 0.6 ~ "0.4 - 0.6", 
+    Ratio_Above_0.5 <= 0.8 ~ "0.6 - 0.8", 
+    Ratio_Above_0.5 <= 1 ~ "0.8 - 1.0", 
+    TRUE ~ "1+" 
+    )) %>% 
+  mutate(mod_group = case_when( 
+    unimod_id == 21 ~'Phosphorylated', 
+    TRUE ~ "-" ))
+
+mean_counts_per_ratio_group <- df %>% 
+  group_by(Uniprot_entry_name, mod_group) %>% 
+  summarize(sum_ptms = sum(counts_norm_abund_len), ratio_group) %>% 
+  filter(!mod_group == '-') %>% 
+  distinct() %>% 
+  group_by(mod_group, ratio_group) %>% 
+  summarise(mean_ptms_group = mean(sum_ptms))
+
+mod_group_colours <- c('Phosphorylated' = '#b3de69', 'oxPTMs' = '#fdb462')
 
 ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fill = mod_group)) + 
   geom_bar(stat = "identity", position = 'dodge') + 
   scale_x_discrete(limits = c("0 - 0.2", "0.2 - 0.4", "0.4 - 0.6", "0.6 - 0.8", "0.8 - 1.0")) + 
-  scale_y_continuous(labels = scales::label_number(scale = 1e4)) + 
+  scale_y_continuous(limits = c(0,0.009)) + 
   scale_fill_manual(values = mod_group_colours) + 
-  labs(x = "Melting temperature (°C)", y = "Mean normalised counts (scaled by 1e4)") + 
+  labs(x = "Proportion of disordered AAs per protein", 
+       y = "Mean normalised counts") + 
   theme_classic() + 
-  theme(legend.title = element_blank(), 
-        legend.text = element_text(size = 16, family = "Lato"), 
-        legend.position = c(0.65,0.93), 
-        legend.direction = 'horizontal', 
+  theme(legend.position = "none",
         axis.text = element_text(size = 16, family = "Lato"),
         axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+Checking the abundance differences between oxPTMs and phospho:
+
+```{r}
+human_complete %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>%
+  summarise(sum(counts_norm_abund_len))
+```
+
+```{r}
+human_complete %>% 
+  filter(unimod_id == 21) %>%
+  summarise(sum(counts_norm_abund_len))
 ```

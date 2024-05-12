@@ -26,6 +26,7 @@ library(tidyr)
 library(readxl)
 library(scales)
 library(stringr)
+library(cluster)
 ```
 
 ```{r}
@@ -109,6 +110,7 @@ sum_Kacyl <- human_ptms %>% filter(unimod_id %in% lysine_acylation & ptm_res == 
 Joining everything:
 
 ```{r}
+#| echo: false
 data <- left_join(leadprot_uniprot, sum_acetyl, by  = join_by(Uniprot_entry_name))
 data <- left_join(data, sum_AGEs, by  = join_by(Uniprot_entry_name))
 data <- left_join(data, sum_Kacyl, by  = join_by(Uniprot_entry_name))
@@ -124,6 +126,7 @@ data <- left_join(data, iupred_scores, by  = join_by('LeadProt' == 'UniProt_ID')
 ```
 
 ```{r}
+#| echo: false
 # filling with 0s
 
 # List of column names where you want to replace NA with 0
@@ -134,7 +137,7 @@ data[columns_to_replace] <- lapply(data[columns_to_replace], function(x) { x[is.
 ```
 
 ```{r}
-
+#| echo: false
 df <- data %>% dplyr::select("Uniprot_entry_name", "sum_AGEs", "sum_acetyl", "sum_Kacyl", "sum_oxPTMs", "sum_phospho",  "sum_ubiq", "sum_meth", "ageing_score", "mean_hl_hours", "mean_mt", "Ratio_Above_0.5")
 column_names <- c("sum_AGEs", "sum_acetyl", "sum_Kacyl", "sum_oxPTMs", "sum_phospho",  "sum_ubiq", "sum_meth", "ageing_score", "mean_hl_hours", "mean_mt", "ratio")
 rows <- df$Uniprot_entry_name
@@ -142,51 +145,37 @@ df <- data.frame(df, row.names = rows)
 df <- df %>% select(-Uniprot_entry_name)
 names(df) <- column_names
 
+# normalisation
 df_complete <- na.omit(df)
-# Optionally, normalize the data
 df <- scale(df_complete)
 
-#distance <- dist(df)
-#dist_matrix <- as.matrix(distance)
-#heatmap(dist_matrix)
-
+# distances
 distance <- get_dist(df)
-fviz_dist(distance, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))
+fviz_dist(distance, order = T, show_labels = F, gradient = list(low = "blue", mid = "white", high = "#FC4E07"))
 
-# Calculate the total within-cluster sum of squares for different numbers of clusters
-#wss <- function(k) {
- # kmeans(df, k, nstart = 10)$tot.withinss
-#}
-
-# Compute and plot the WSS for k = 1 to 10
-#k.values <- 1:20
-#wss.values <- sapply(k.values, wss)
-
-#plot(k.values, wss.values, type = "b", pch = 19, frame = FALSE,
- #    xlab = "Number of clusters (k)",
-  #   ylab = "Total within-cluster sum of squares")
 
 set.seed(123)
-
 fviz_nbclust(df, kmeans, method = "wss", k.max = 25)
 
 # Set the number of clusters
 num_clusters <- 9
 
-# Perform k-means clustering
+# k-means clustering
 kmeans_result <- kmeans(df, centers = num_clusters, nstart = 25)
 
 # View the results
 print(kmeans_result)
-
-
-# Using factoextra to visualize clusters
-fviz_cluster(kmeans_result, data = df)
-
 ```
 
 ```{r}
-library(cluster)
+#| echo: false
+# Using factoextra to visualize clusters
+fviz_cluster(kmeans_result, data = df, ggtheme = theme_classic(), main = NULL, labelsize = 11, geom = c('point'), show.clust.cent = T)
+```
+
+```{r}
+#| echo: false
+#| eval: false
 sil_scores <- silhouette(kmeans_result$cluster, dist(df))
 
 # Create a data frame from the silhouette object
@@ -213,6 +202,7 @@ plot(silhouette_scores)
 Getting the cluster members:
 
 ```{r}
+#| echo: false
 clusters <- kmeans_result$cluster
 # Create a data frame with cluster assignments
 df_with_clusters <- data.frame(df, Cluster = clusters)
@@ -224,4 +214,32 @@ cluster2 <- df_with_clusters[df_with_clusters$Cluster == 2, ] %>%
   rownames_to_column(var = "UniProt")
 cluster3 <- df_with_clusters[df_with_clusters$Cluster == 3, ] %>%
   rownames_to_column(var = "UniProt")
+cluster4 <- df_with_clusters[df_with_clusters$Cluster == 4, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster5 <- df_with_clusters[df_with_clusters$Cluster == 5, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster6 <- df_with_clusters[df_with_clusters$Cluster == 6, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster7 <- df_with_clusters[df_with_clusters$Cluster == 7, ] %>%
+  rownames_to_column(var = "UniProt")
+```
+
+# PCA
+
+```{r}
+#| echo: false
+# Step 2: Standardize and perform PCA
+pca_result <- prcomp(df, center = TRUE, scale. = F)
+
+# Step 4: Summarize the results
+summary(pca_result)
+
+# Step 5: Inspect components (loadings)
+pca_result$rotation
+
+# Plot Scree Plot to check explained variance by each component
+screeplot(pca_result, type = "lines", main = "Scree Plot")
+
+# Optional: Visualize PCA results using biplot
+biplot(pca_result, main = "PCA Biplot")
 ```

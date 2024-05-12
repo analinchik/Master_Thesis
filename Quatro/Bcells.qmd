@@ -13,6 +13,8 @@ editor: visual
 ---
 
 ```{r}
+#| echo: false
+#| include: false
 library(dplyr)
 library(ggplot2)
 library(tidyr)
@@ -76,59 +78,68 @@ Methylation of histones. Do histones get more methylised as we age? compare the 
 Where are the histones from?
 
 ```{r}
+#| echo: false
 histones <- read.csv(file = '/Users/anastasialinchik/Downloads/idmapping_2024_04_30.tsv', header = T, sep = '\t')
-histones
-human_ptms_cyto_old %>% filter(LeadProt %in% histones$Entry)
-human_ptms_cyto_young %>% filter(LeadProt %in% histones$Entry)
 
 histones_mod_old <- human_ptms_nuc_old %>% filter(LeadProt %in% histones$Entry)
 histones_mod_young <- human_ptms_nuc_young %>% filter(LeadProt %in% histones$Entry)
 ```
 
-## Methylation
-
 ```{r}
+#| echo: false
 
 df2 <- histones_mod_young %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'young')
 df1 <- histones_mod_old %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
 
 df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
 ggplot(df, aes(y = sum, x = group)) +
-  geom_boxplot() +
-  theme_classic() +
-  theme()
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
 ```
 
 ```{r}
+#| echo: false
 wilcox.test(df1$sum, df2$sum)
 ```
 
-## All modifications
-
-(maybe it would be better to look a)
+(maybe it would be better to look at all modifications, not just methylation)
 
 What about modifications in histones in general? Not just methylation? Use only the nuclear groups bcs histones are obviously in the nucleus.
 
 ```{r}
+#| echo: false
 df2 <- histones_mod_young %>% filter(ptm_class == 'Post-translational') %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'young')
 df1 <- histones_mod_old %>% filter(ptm_class == 'Post-translational') %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
 
 df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
 ggplot(df, aes(y = sum, x = group)) +
-  geom_boxplot() +
-  theme_classic() +
-  theme()
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e4)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e4)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
 ```
 
 ```{r}
+#| echo: false
 wilcox.test(df1$sum, df2$sum)
 ```
 
-# Enriched PTMs
+## Enriched PTMs in histones
 
-Which PTMs are enriched in old cells compared to new?
+Which PTMs are enriched in the histones of old cells compared to new?
 
 ```{r}
+#| echo: false
 df1 <- histones_mod_young %>% filter(ptm_class == 'Post-translational') %>% 
   group_by(ptm_name) %>%
   summarise(sum =sum(counts_norm_abund_len))
@@ -143,20 +154,17 @@ df3 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old'
 ```
 
 ```{r}
+#| echo: false
 ggplot(df3, aes(y = reorder(ptm_name, change), x = change)) +
   geom_col() +
   labs(y = 'PTMs', x = 'Fold change') +
   theme_classic()
 ```
 
-# Chaperones
-
-## oxPTMs
-
-Repressed chaperones get more oxPTMs?
+# PTMs Chaperones
 
 ```{r}
-
+#| echo: false
 all_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/all_chaperones.xlsx', sheet = 'BREHME_TABLE S2A', skip = 8)
 
 repressed_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3D', skip = 19)
@@ -168,28 +176,41 @@ induced_chaperones <- separate_wider_delim(induced_chaperones, col = 'Label [Fam
 induced_chaperones <- inner_join(induced_chaperones, all_chaperones, by = join_by('Entrez-ID'))
 ```
 
+## oxPTMs
+
+Repressed chaperones get more oxPTMs?
+
 Do aged chaperones have more oxPTMs than non-aged?
 
+Not significant for both nuc and cyto
+
 ```{r}
-df1 <- human_ptms_nuc_young %>% 
+#| echo: false
+df1 <- human_ptms_cyto_young %>% 
   filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
   filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
   group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
   distinct() %>% mutate(group = 'young')
-df2 <- human_ptms_nuc_old %>% 
+df2 <- human_ptms_cyto_old %>% 
   filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
   filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
   group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
   distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
 
 df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
 ggplot(df, aes(y = sum, x = group)) +
-  geom_boxplot() +
-  theme_classic() +
-  theme()
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
 ```
 
 ```{r}
+#| echo: false
 wilcox.test(df1$sum, df2$sum)
 ```
 
@@ -200,6 +221,7 @@ NOT FOUND
 ## Oxidation
 
 ```{r}
+#| echo: false
 df1 <- human_ptms_cyto_young %>% 
   filter(unimod_id == 35) %>% 
   filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
@@ -213,18 +235,24 @@ df2 <- human_ptms_cyto_old %>%
 
 df <- rbind(df1, df2)
 ggplot(df, aes(y = sum, x = group)) +
-  geom_boxplot() +
-  theme_classic() +
-  theme()
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
 ```
 
 ```{r}
+#| echo: false
 wilcox.test(df1$sum, df2$sum)
 ```
 
 # Fold change
 
 ```{r}
+#| echo: false
 df1 <- human_ptms_cyto_young %>% filter(ptm_class == 'Post-translational') %>% 
   group_by(Uniprot_entry_name) %>%
   summarise(sum =sum(counts_norm_abund_len))
@@ -237,586 +265,17 @@ df3 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_youn
   filter(sum_old > sum_young) %>%
   mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
   arrange(desc(change))
+
+df4 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
+  filter(sum_old < sum_young) %>%
+  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
+  arrange(desc(change))
 ```
 
 ```{r}
-write.table(df3$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/enriched.tsv', row.names = F, sep="\t", quote = F)
+#| echo: false
+write.table(df3$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/up_in_old.tsv', row.names = F, sep="\t", quote = F)
+write.table(df4$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/down_in_old.tsv', row.names = F, sep="\t", quote = F)
 ```
 
 This list can be used for DAVID to check for significant enrichment of GO terms.
-
-# K-means prep
-
-Need the following columns in a dataframe:
-
--   ageing score
-
--   \# of PTM modification counts in cyto young
-
--   \# of PTM modification counts in cyto old
-
--   \# of PTM modification counts in nuc young
-
--   \# of PTM modification counts in nuc old
-
--   percentage of all modifications that are oxPTMs
-
--   percentage of all modifications that are AGEs
-
--   percentage of all modifications that are K acylations
-
--   percentage of PTMs that are methylations
-
--   MT
-
--   IUPred
-
--   hl
-
-```{r}
-
-# percentages
-
-sum_oxPTMs <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% group_by(Uniprot_entry_name) %>%
-  summarise(sum_oxPTMs = sum(counts_norm_abund_len)) 
-totals <- human_complete %>% group_by(Uniprot_entry_name) %>%
-  summarise(totals = sum(counts_norm_abund_len))
-perc_oxPTMs <- inner_join(sum_oxPTMs, totals, by = join_by(Uniprot_entry_name)) %>% mutate(sum_oxPTMs/totals)
-
-
-sum_AGEs <- human_complete %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
-  summarise(sum_AGEs = sum(counts_norm_abund_len)) 
-perc_AGEs <- inner_join(sum_AGEs, totals, by = join_by(Uniprot_entry_name)) %>% mutate(sum_AGEs/totals)
-
-# PTMs numbers
-
-sum_cyto_young <- human_ptms_cyto_young %>% group_by(Uniprot_entry_name) %>%
-  summarise(sum_cyto_young = sum(counts_norm_abund_len))
-sum_cyto_old <- human_ptms_cyto_old %>% group_by(Uniprot_entry_name) %>%
-  summarise(sum_cyto_old = sum(counts_norm_abund_len))
-
-cyto <- inner_join(sum_cyto_young, sum_cyto_old, by = join_by(Uniprot_entry_name))
-
-sum_nuc_young <-human_ptms_nuc_young %>% group_by(Uniprot_entry_name) %>%
-  summarise(sum_nuc_young = sum(counts_norm_abund_len))
-sum_nuc_old <- human_ptms_nuc_old %>% group_by(Uniprot_entry_name) %>%
-  summarise(sum_nuc_old = sum(counts_norm_abund_len))
-
-nuc <- inner_join(sum_nuc_young, sum_nuc_old, by = join_by(Uniprot_entry_name))
-
-PTMs <- inner_join(nuc, cyto, by = join_by(Uniprot_entry_name))
-# ageing score
-
-age_proteins <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/aging_labels.csv', header = T)
-age_scores <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/Final_32_features.csv-XGBoost_CV_preds-n_est50-exp20.csv', header = T)
-
-age_proteins$score <- age_scores$preds
-names(age_proteins) <- c('Uniprot_entry_name', 'GenAge', 'score')
-
-# hl
-Bcells_hl_uni <- inner_join(Bcells_hl, leadprot_uniprot, by = join_by('LeadProt'))
-
-# MT
-mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
-
-mt <- separate_rows(mt, Protein_ID, sep = ";")
-mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
-
-# IUPred
-iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
-
-data <- inner_join(perc_oxPTMs, PTMs, by = join_by(Uniprot_entry_name))
-data <- inner_join(data, age_proteins, by = join_by(Uniprot_entry_name))
-data <- inner_join(data, Bcells_hl_uni, by = join_by(Uniprot_entry_name))
-data <- inner_join(data, mt, by = join_by(LeadProt))
-data <- inner_join(data, iupred_scores, by = join_by(LeadProt == 'UniProt_ID'))
-```
-
-# Half-lives
-
-```{r}
-#| echo: false
-
-human_ptms_cyto_old_hl <- human_ptms_cyto_old %>% 
-  inner_join(Bcells_hl, by = join_by(LeadProt))
-human_ptms_cyto_young_hl <- human_ptms_cyto_young %>% 
-  inner_join(Bcells_hl, by = join_by(LeadProt))
-
-human_ptms_nuc_old_hl <- human_ptms_nuc_old %>% 
-  inner_join(Bcells_hl, by = join_by(LeadProt))
-human_ptms_nuc_young_hl <- human_ptms_nuc_young %>% 
-  inner_join(Bcells_hl, by = join_by(LeadProt))
-```
-
-## Distribution of the half-lives
-
-Take the cytoplasmic proteins and plot 2 density plots. Compare the distributions of the half-lives between the
-
-Look at only the cytoplasmic ones:
-
-```{r}
-human_ptms_cyto_old_hl %>% distinct(LeadProt) %>% dim()
-human_ptms_cyto_young_hl %>% distinct(LeadProt) %>% dim()
-human_ptms_cyto_old_hl %>% filter(!LeadProt %in% human_ptms_cyto_young_hl$LeadProt) %>% distinct(LeadProt) %>% dim()
-human_ptms_cyto_old_hl %>% filter(LeadProt %in% human_ptms_cyto_young_hl$LeadProt) %>% distinct(LeadProt) %>% dim()
-human_ptms_cyto_young_hl %>% filter(!LeadProt %in% human_ptms_cyto_old_hl$LeadProt) %>% distinct(LeadProt) %>% dim()
-```
-
-Venn diagram
-
-```{r}
-# Unique LeadProt in Old
-old_proteins <- human_ptms_cyto_old_hl %>%
-  distinct(LeadProt) %>%
-  pull(LeadProt)
-
-# Unique LeadProt in Young
-young_proteins <- human_ptms_cyto_young_hl %>%
-  distinct(LeadProt) %>%
-  pull(LeadProt)
-
-# Define your sets
-list_of_sets <- list(
-  Old = old_proteins,
-  Young = young_proteins
-)
-
-display_venn <- function(x, ...){
-  grid.newpage()
-  venn_object <- venn.diagram(x, filename = NULL, ...)
-  grid.draw(venn_object)
-}
-display_venn(list_of_sets, category.names = c("Old cyt" , "Young cyt" ),
-  fill = c("#EA7317", "#FFB703"), fontfamily = "Lato", cat.fontfamily = "Lato", alpha = 0.6, cex = 1.5, cat.cex = 1.2, margin = 0.05)
-```
-
-```{r}
-# Unique LeadProt in Old
-old_proteins <- human_ptms_nuc_old_hl %>%
-  distinct(LeadProt) %>%
-  pull(LeadProt)
-
-# Unique LeadProt in Young
-young_proteins <- human_ptms_nuc_young_hl %>%
-  distinct(LeadProt) %>%
-  pull(LeadProt)
-
-# Define your sets
-list_of_sets <- list(
-  Old = old_proteins,
-  Young = young_proteins
-)
-
-display_venn <- function(x, ...){
-  grid.newpage()
-  venn_object <- venn.diagram(x, filename = NULL, ...)
-  grid.draw(venn_object)
-}
-display_venn(list_of_sets, category.names = c("Old nuc" , "Young nuc" ),
-  fill = c("#2364AA", "#5DB7B1"), fontfamily = "Lato", cat.fontfamily = "Lato", alpha = 0.6, cex = 1.5, cat.cex = 1.2, margin = 0.05)
-```
-
-```{r}
-# cytopasmic proteins in both
-cyto_both <- human_ptms_cyto_old_hl %>% filter(LeadProt %in% human_ptms_cyto_young_hl$LeadProt) %>% distinct(LeadProt)
-cyto_old_only <- human_ptms_cyto_old_hl %>% filter(!LeadProt %in% human_ptms_cyto_young_hl$LeadProt) %>% distinct(LeadProt)
-cyto_young_only <- human_ptms_cyto_young_hl %>% filter(!LeadProt %in% human_ptms_cyto_old_hl$LeadProt) %>% distinct(LeadProt)
-
-
-# nucleoplasmic
-nuc_both <- human_ptms_nuc_old_hl %>% filter(LeadProt %in% human_ptms_nuc_young_hl$LeadProt) %>% distinct(LeadProt)
-nuc_old_only <- human_ptms_nuc_old_hl %>% filter(!LeadProt %in% human_ptms_nuc_young_hl$LeadProt) %>% distinct(LeadProt)
-nuc_young_only <- human_ptms_nuc_young_hl %>% filter(!LeadProt %in% human_ptms_nuc_old_hl$LeadProt) %>% distinct(LeadProt)
-```
-
-```{r}
-#| warning: false
-ggplot() +
-  geom_density(data = human_ptms_cyto_old_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_old'), alpha = 0.7, bw = 4) +
-  geom_density(data = human_ptms_cyto_young_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_young'), alpha = 0.7, bw = 4) +
-  scale_fill_manual(values = c('cyto_old' = '#EA7317', 'cyto_young' = '#FFB703'), name = 'Legend') +
-  scale_x_continuous(limits = c(0,600)) +
-  theme_classic()
-```
-
-Only look at the proteins that are present in both
-
-```{r}
-#| warning: false
-df1 <- human_ptms_cyto_old_hl %>% filter(LeadProt %in% cyto_both$LeadProt)
-df2 <- human_ptms_cyto_young_hl %>% filter(LeadProt %in% cyto_both$LeadProt)
-ggplot() +
-  geom_density(data = df1, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_old'), alpha = 0.7, bw = 4) +
-  geom_density(data = df2, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_young'), alpha = 0.7, bw = 4) +
-  scale_fill_manual(values = c('cyto_old' = '#EA7317', 'cyto_young' = '#FFB703'), name = 'Legend') +
-  scale_x_continuous(limits = c(0,350)) +
-  theme_classic()
-```
-
-```{r}
-#| warning: false
-ggplot() +
-  geom_density(data = human_ptms_nuc_old_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_old'), alpha = 0.7, bw = 4) +
-  geom_density(data = human_ptms_nuc_young_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_young'), alpha = 0.7, bw = 4) +
-  scale_fill_manual(values = c('nuc_old' = '#2364AA', 'nuc_young' = '#5DB7B1'), name = 'Legend') +
-  scale_x_continuous(limits = c(0,350)) +
-  theme_classic()
-```
-
-```{r}
-df1 <- human_ptms_nuc_old_hl %>% filter(LeadProt %in% nuc_both$LeadProt)
-df2 <- human_ptms_nuc_young_hl %>% filter(LeadProt %in% nuc_both$LeadProt)
-
-ggplot() +
-  geom_density(data = df1, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_old'), alpha = 0.7, bw = 4) +
-  geom_density(data = df2, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_young'), alpha = 0.7, bw = 4) +
-  scale_fill_manual(values = c('nuc_old' = '#2364AA', 'nuc_young' = '#5DB7B1'), name = 'Legend') +
-  scale_x_continuous(limits = c(0,350)) +
-  theme_classic()
-```
-
-```{r}
-#| warning: false
-df1 <- human_ptms_nuc_old_hl %>% filter(LeadProt %in% nuc_both$LeadProt)
-df2 <- human_ptms_nuc_young_hl %>% filter(LeadProt %in% nuc_both$LeadProt)
-
-ggplot() +
-  geom_density(data = df1, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_old'), alpha = 0.7, bw = 4) +
-  geom_density(data = df2, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_young'), alpha = 0.7, bw = 4) +
-  scale_fill_manual(values = c('nuc_old' = '#2364AA', 'nuc_young' = '#5DB7B1'), name = 'Legend') +
-  scale_x_continuous(limits = c(0,350)) +
-  theme_classic()
-```
-
-```{r}
-#| echo: false
-#| warning: false
-
-ggplot() +
-  geom_density(data = human_ptms_cyto_old_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_old'), alpha = 0.7, bw = 4) +
-  geom_density(data = human_ptms_cyto_young_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_young'), alpha = 0.7, bw = 4) +
-  geom_density(data = human_ptms_nuc_old_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_old'), alpha = 0.7, bw = 4) +
-  geom_density(data = human_ptms_nuc_young_hl, aes(x = mean_hl_hours, weight = norm_counts, fill = 'nuc_young'), alpha = 0.7, bw = 4) +
-  scale_x_continuous(limits = c(0,400)) +
-  scale_fill_manual(values = c('cyto_old' = '#EA7317', 'cyto_young' = '#FFB703','nuc_old'  = "#5DB7B1",'nuc_young' = '#3DA5D9'), name = 'Legend') +
-  theme_classic()
-```
-
-## PTMs
-
-### Phosphorylation
-
-For cytoplasmic proteins what are the differences between old and young proteins?
-
-```{r}
-#| warning: false
-human_ptms_cyto_old_hl_pho <- human_ptms_cyto_old_hl %>% filter(unimod_id == 21) 
-human_ptms_cyto_old_hl_no_pho <- human_ptms_cyto_old_hl %>% filter(!unimod_id == 21) 
-human_ptms_cyto_young_hl_no_pho <- human_ptms_cyto_young_hl %>% filter(!unimod_id == 21) 
-human_ptms_cyto_young_hl_pho <- human_ptms_cyto_young_hl %>% filter(unimod_id == 21) 
-
-human_ptms_nuc_old_hl_pho <- human_ptms_nuc_old_hl %>% filter(unimod_id == 21) 
-human_ptms_nuc_old_hl_no_pho <- human_ptms_nuc_old_hl %>% filter(!unimod_id == 21) 
-human_ptms_nuc_young_hl_pho <-  human_ptms_nuc_young_hl %>% filter(unimod_id == 21) 
-human_ptms_nuc_young_hl_no_pho <-  human_ptms_nuc_young_hl %>% filter(!unimod_id == 21) 
-
-ggplot() +
-  geom_density(data = human_ptms_cyto_old_hl_pho, aes(x = mean_hl_hours, weight = norm_counts, fill = 'cyto_old_hl_pho'), alpha = 0.7, bw = 5) +
-  geom_density(data = human_ptms_cyto_old_hl_no_pho, aes(x = mean_hl_hours, weight = norm_counts,fill = 'cyto_old_hl_no_pho'), alpha = 0.7, bw = 5) +
-  geom_density(data = human_ptms_cyto_young_hl_no_pho, aes(x = mean_hl_hours, weight = norm_counts,fill = 'cyto_young_hl_no_pho'), alpha = 0.7, bw = 5) +
-   geom_density(data = human_ptms_cyto_young_hl_pho, aes(x = mean_hl_hours, weight = norm_counts,fill = 'cyto_young_hl_pho'), alpha = 0.7, bw = 5) +
-  labs(x = 'Mean half-lives (hours)', y = 'Density') +
-  scale_x_continuous(limits = c(0,150)) +
-  theme_classic() +
-  scale_fill_manual(values = c('cyto_old_hl_pho' = '#EA7317', 'cyto_old_hl_no_pho' = '#FFB703','cyto_young_hl_no_pho'  = "#5DB7B1",'cyto_young_hl_pho' = '#3DA5D9'), name = 'Legend')  # Manually specify fill colors
-```
-
-### Methylation
-
-### Acetylation
-
-### Oxidation
-
-### oxPTMs
-
-Approach:
-
--   Get a list of PTMs that correlate with ageing such as oxPTMs, acetylation etc.
-
--   Test whether the abundance of these PTMs changes between the long-lived proteins and the normal proteins.
-
-### Bar chart
-
-Is there less phosphorylation in young cells compared to old cells?
-
-```{r}
-#| echo: false
-
-df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'old')
-df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'young')
-df <- rbind(df_1, df_2)
-df <- df %>%
-  mutate(hl_group = case_when(
-    mean_hl_hours <= 50 ~ "0-50",
-    mean_hl_hours <= 100 ~ "50-100",
-    mean_hl_hours <= 150 ~ "100-150",
-    mean_hl_hours <= 200 ~ "150-200",
-    mean_hl_hours <= 250 ~ "200-250",
-    TRUE ~ "250+"
-  )) 
-
-mean_hours_per_hl_group <- df %>%
-  group_by(hl_group, age_group) %>%
-  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
-
-mod_group_colours <- c('young' = '#EA7317', 'old' = '#5DB7B1')
-# Plot bar chart
-ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
-  geom_bar(stat = "identity", position = 'dodge') +
-  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
-  scale_fill_manual(values = mod_group_colours, name = 'Key') +
-  labs(x = "Half-lives (hours)",
-       y = "Mean sum of normalised PTM counts") +
-  theme_classic()
-```
-
-Acetylation
-
-```{r}
-df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'nuc_old') %>% filter(unimod_id == 1)
-df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'nuc_young') %>% filter(unimod_id == 1)
-df_3 <- human_ptms_cyto_old_hl %>% mutate(age_group = 'cyto_old') %>% filter(unimod_id == 1)
-df_4 <- human_ptms_cyto_young_hl %>% mutate(age_group = 'cyto_young') %>% filter(unimod_id == 1)
-
-df <- rbind(df_1, df_2, df_3, df_4)
-df <- df %>%
-  mutate(hl_group = case_when(
-    mean_hl_hours <= 50 ~ "0-50",
-    mean_hl_hours <= 100 ~ "50-100",
-    mean_hl_hours <= 150 ~ "100-150",
-    mean_hl_hours <= 200 ~ "150-200",
-    mean_hl_hours <= 250 ~ "200-250",
-    TRUE ~ "250+"
-  )) 
-
-mean_hours_per_hl_group <- df %>%
-  group_by(hl_group, age_group) %>%
-  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
-
-mod_group_colours <- c('nuc_old' = '#EA7317', 'cyto_old' = '#2364AA', 'nuc_young' = '#F9AE8B', 'cyto_young' = '#219EBC')
-# Plot bar chart
-ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
-  geom_bar(stat = "identity", position = 'dodge') +
-  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
-  scale_fill_manual(values = mod_group_colours, name = 'Key') +
-  labs(x = "Half-lives (hours)",
-       y = "Mean sum of normalised PTM counts") +
-  theme_classic()
-```
-
-Phosphorylation
-
-```{r}
-df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'nuc_old') %>% filter(unimod_id == 21)
-df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'nuc_young') %>% filter(unimod_id == 21)
-df_3 <- human_ptms_cyto_old_hl %>% mutate(age_group = 'cyto_old') %>% filter(unimod_id == 21)
-df_4 <- human_ptms_cyto_young_hl %>% mutate(age_group = 'cyto_young') %>% filter(unimod_id == 21)
-
-df <- rbind(df_1, df_2, df_3, df_4)
-df <- df %>%
-  mutate(hl_group = case_when(
-    mean_hl_hours <= 50 ~ "0-50",
-    mean_hl_hours <= 100 ~ "50-100",
-    mean_hl_hours <= 150 ~ "100-150",
-    mean_hl_hours <= 200 ~ "150-200",
-    mean_hl_hours <= 250 ~ "200-250",
-    TRUE ~ "250+"
-  )) 
-
-mean_hours_per_hl_group <- df %>%
-  group_by(hl_group, age_group) %>%
-  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
-
-mod_group_colours <- c('nuc_old' = '#EA7317', 'cyto_old' = '#2364AA', 'nuc_young' = '#F9AE8B', 'cyto_young' = '#219EBC')
-# Plot bar chart
-ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
-  geom_bar(stat = "identity", position = 'dodge') +
-  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
-  scale_fill_manual(values = mod_group_colours, name = 'Key') +
-  labs(x = "Half-lives (hours)",
-       y = "Mean sum of normalised PTM counts") +
-  theme_classic()
-```
-
-Look at oxPTMs
-
-```{r}
-df_1 <- human_ptms_nuc_old_hl %>% mutate(age_group = 'nuc_old') %>% filter(unimod_id %in% oxPTMs$ID)
-df_2 <- human_ptms_nuc_young_hl %>% mutate(age_group = 'nuc_young') %>% filter(unimod_id %in% oxPTMs$ID)
-df_3 <- human_ptms_cyto_old_hl %>% mutate(age_group = 'cyto_old') %>% filter(unimod_id %in% oxPTMs$ID)
-df_4 <- human_ptms_cyto_young_hl %>% mutate(age_group = 'cyto_young') %>% filter(unimod_id %in% oxPTMs$ID)
-
-df <- rbind(df_1, df_2, df_3, df_4)
-df <- df %>%
-  mutate(hl_group = case_when(
-    mean_hl_hours <= 50 ~ "0-50",
-    mean_hl_hours <= 100 ~ "50-100",
-    mean_hl_hours <= 150 ~ "100-150",
-    mean_hl_hours <= 200 ~ "150-200",
-    mean_hl_hours <= 250 ~ "200-250",
-    TRUE ~ "250+"
-  )) 
-
-mean_hours_per_hl_group <- df %>%
-  group_by(hl_group, age_group) %>%
-  summarize(age_group, mean_ptms_group = mean(norm_counts)) %>% distinct()
-
-mod_group_colours <- c('nuc_old' = '#EA7317', 'cyto_old' = '#2364AA', 'nuc_young' = '#F9AE8B', 'cyto_young' = '#219EBC')
-# Plot bar chart
-ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = age_group)) +
-  geom_bar(stat = "identity", position = 'dodge') +
-  scale_x_discrete(limits = c("0-50", "50-100", "100-150", "150-200", "200-250", "250+")) +
-  scale_fill_manual(values = mod_group_colours, name = 'Key') +
-  labs(x = "Half-lives (hours)",
-       y = "Mean sum of normalised PTM counts") +
-  theme_classic()
-```
-
-# Modifications in cytoplasmic proteins
-
-The more modified proteins vs less modified proteins depending on the age.
-
-```{r}
-human_cyto_old <- human_complete %>%
-  filter(project_id == 'PXD006570') 
-
-human_cyto_young <- human_complete %>%
-  filter(project_id == 'PXD006572') 
-
-df1 <- human_cyto_old 
-df2 <- human_cyto_young
-
-# Aggregating normalized counts for df1
-df1_aggregated <- df1 %>%
-  group_by(LeadEntry) %>%
-  summarise(total_count = sum(norm_counts))
-
-# Aggregating normalized counts for df2
-df2_aggregated <- df2 %>%
-  group_by(LeadEntry) %>%
-  summarise(total_count = sum(norm_counts))
-
-# Merging the two datasets
-merged_data <- merge(df1_aggregated, df2_aggregated, by = "LeadEntry", suffixes = c("_df1", "_df2"))
-
-# Calculating fold change
-
-merged_data <- merged_data %>%
-  mutate(mean_count_df1 = total_count_df1 / sum(human_cyto_old$norm_count),
-         mean_count_df2 = total_count_df2 / sum(human_cyto_young$norm_count)) %>%
-  mutate(fold_change = mean_count_df1 / mean_count_df2)
-
-merged_data <- merged_data %>% mutate(log_fold = log2(fold_change)) %>% arrange(desc(log_fold)) 
-```
-
-```{r}
-df <- rbind(merged_data[1:10,], merged_data[2682:2692,])
-ggplot(df, aes(x = log_fold, y = LeadEntry)) +
-  geom_col()
-```
-
-```{r}
-merged_data %>% filter(log_fold > 1) %>% dplyr:: select(LeadEntry) %>%
-write.table(file = '/Users/anastasialinchik/Downloads/ids.tsv', row.names = F, sep="\t", quote = F)
-```
-
-The up/down regulated modifications
-
-```{r}
-human_cyto_old <- human_complete %>%
-  filter(project_id == 'PXD006570') %>% filter(ptm_class== 'Post-translational')
-
-human_cyto_young <- human_complete %>%
-  filter(project_id == 'PXD006572') %>% filter(ptm_class== 'Post-translational')
-
-df1 <- human_cyto_old
-df2 <- human_cyto_young
-
-# Aggregating normalized counts for df1
-df1_aggregated <- df1 %>%
-  group_by(ptm_name) %>%
-  summarise(total_count = sum(norm_counts))
-
-# Aggregating normalized counts for df2
-df2_aggregated <- df2 %>%
-  group_by(ptm_name) %>%
-  summarise(total_count = sum(norm_counts))
-
-# Merging the two datasets
-merged_data <- merge(df1_aggregated, df2_aggregated, by = "ptm_name", suffixes = c("_df1", "_df2"))
-
-# Calculating fold change
-
-merged_data <- merged_data %>%
-  mutate(mean_count_df1 = total_count_df1 / sum(human_cyto_old$norm_count),
-         mean_count_df2 = total_count_df2 / sum(human_cyto_young$norm_count)) %>%
-  mutate(fold_change = mean_count_df1 / mean_count_df2)
-
-merged_data <- merged_data %>% mutate(log_fold = log2(fold_change)) %>% arrange(desc(log_fold)) 
-```
-
-```{r}
-df <- rbind(merged_data[1:10,], merged_data[49:59,])
-ggplot(df, aes(x = log_fold, y = ptm_name)) +
-  geom_col() + 
-```
-
-## Chaperones
-
-```{r}
-all_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/all_chaperones.xlsx', sheet = 'BREHME_TABLE S2A', skip = 8, col_names = T) %>% dplyr::select(`Entrez-ID`, `Uniprot`) %>% separate_rows(Uniprot, sep = "; ") 
-
-cols <- c('Entry#', 'Label [Family]', 'Age-correlation', 'p-val', 'col5', 'col6', 'col7', 'col8', 'col9', 'col10')
-repressed_chap <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3D', skip = 20, col_names = cols) %>% dplyr::select('Entry#', 'p-val') %>% inner_join(all_chaperones, by = join_by('Entry#' == 'Entrez-ID'))
-
-induced_chap <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3E', skip = 19, col_names = T) %>% dplyr::select(`Entrez-ID`) %>% inner_join(all_chaperones, by = 'Entrez-ID')
-```
-
-Does the mean sum of the modifications in young vs old significant?
-
--   the total modificaitons are significantly different but not post-translational
-
-```{r}
-df1 <- human_ptms_cyto_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
-  group_by(Uniprot_entry_name) %>%
-  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'young')
-df2 <- human_ptms_cyto_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name) %>%
-  group_by(Uniprot_entry_name) %>%
-  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'old')
-
-wilcox.test(df1$sum_mod, df2$sum_mod)
-```
-
-```{r}
-
-df3 <- rbind(df1,df2)
-ggplot(df3, aes(x = group, y = sum_mod)) +
-  geom_boxplot(outliers = F)
-```
-
-```{r}
-df1 <- human_ptms_nuc_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
-  group_by(Uniprot_entry_name) %>%
-  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'young')
-df2 <- human_ptms_nuc_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name) %>%
-  group_by(Uniprot_entry_name) %>%
-  summarise(sum_mod = sum(counts_norm_abund_len)) %>% mutate(group = 'old')
-
-wilcox.test(df1$sum_mod, df2$sum_mod)
-```
-
-```{r}
-df3 <- rbind(df1,df2)
-ggplot(df3, aes(x = group, y = sum_mod)) +
-  geom_boxplot(outliers = F)
-```

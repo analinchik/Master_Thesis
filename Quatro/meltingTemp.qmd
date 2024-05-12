@@ -464,6 +464,9 @@ print('P-value cut-off')
 General binning where we do not split by the type of modification:
 
 ```{r}
+#| echo: false
+#| warning: false
+#| message: false
 df <- ptms_mt %>%
   mutate(mt_group = case_when(
     mean_mt <= 45 ~ "40-45",
@@ -537,7 +540,7 @@ ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = m
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 16, family = "Lato"),
-        legend.position = c(0.8,0.92), 
+        legend.position = c(0.7,0.92), 
         legend.direction = 'horizontal',
         axis.text = element_text(size = 16, family = "Lato"),  
         axis.title = element_text(size = 16, family = "Lato"))
@@ -589,7 +592,7 @@ ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = m
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 16, family = "Lato"),
-        legend.position = c(0.72,0.9), 
+        legend.position = c(0.65,0.9), 
         legend.direction = 'horizontal',
         axis.text = element_text(size = 16, family = "Lato"),  
         axis.title = element_text(size = 16, family = "Lato"))
@@ -638,7 +641,7 @@ ggplot(mean_counts_per_mt_group, aes(x = mt_group, y = mean_ptms_group, fill = m
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 16, family = "Lato"),
-        legend.position = c(0.75,0.93), 
+        legend.position = c(0.7,0.93), 
         legend.direction = 'horizontal',
         axis.text = element_text(size = 16, family = "Lato"),  
         axis.title = element_text(size = 16, family = "Lato"))
