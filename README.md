@@ -27,9 +27,9 @@ Subsets of proteins:
 
 `Bcells.qmd`
 
-Then ageing proteins
+K-means clustering:
 
-And chaperones???
+`kmeans.qmd`
 
 
 # Extra Data files
