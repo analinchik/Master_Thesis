@@ -21,7 +21,6 @@ library(tidyr)
 library(readxl)
 library(kableExtra)
 library(ggpubr)
-library(plotly)
 library(stringr)
 library(VennDiagram)
 ```
@@ -60,6 +59,8 @@ nuclear proteins:
 -   old B cells:PXD006571
 
 -   young B cells:PXD006576
+
+there were 3 young donors and 3 elderly donors
 
 ```{r}
 #| echo: false
@@ -278,4 +279,116 @@ write.table(df3$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/up
 write.table(df4$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/down_in_old.tsv', row.names = F, sep="\t", quote = F)
 ```
 
-This list can be used for DAVID to check for significant enrichment of GO terms.
+This list can be used for DAVID to check for significant enrichment of GO terms.I
+
+# Changes in high disorder/long residence times proteins
+
+There were 3 young donors and 3 elederly donors so can plot histograms instead of density plots.
+
+```{r}
+#| echo: false
+#| include: false
+
+mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
+mt <- separate_rows(mt, Protein_ID, sep = ";")
+mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
+
+iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
+
+short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`) %>% rename(LeadProt = `Uniprot ID`, mean_hl_hours = `Half-life`)
+
+long_lived_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_grouped.tsv', sep = '\t', header = T)
+```
+
+MT
+
+```{r}
+#| echo: false
+f <- human_ptms_cyto_young %>% inner_join(mt, by = join_by('LeadProt'))
+b <- human_ptms_cyto_old %>% inner_join(mt, by = join_by('LeadProt'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot() +
+  geom_histogram(data = f, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bw = 0.6) + 
+  geom_histogram(data = b, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) +
+  labs(x = 'Melting temperature (°C)', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 13, family = "Lato"),
+        legend.position = c(0.28,0.9), 
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+check half-lives and iupred
+
+```{r}
+#| echo: false
+f <- human_ptms_cyto_young %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+b <- human_ptms_cyto_old %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot() +
+  geom_histogram(data = f, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bw = 0.6) + 
+  geom_histogram(data = b, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) +
+  labs(x = 'Proportion of amino acids with a score above 0.5', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 13, family = "Lato"),
+        legend.position = c(0.28,0.9), 
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"))
+```
+
+Short Half-lives
+
+```{r}
+#| echo: false
+f <- human_ptms_cyto_young %>% inner_join(short_lived_proteins_hl, by = join_by('LeadProt'))
+b <- human_ptms_cyto_old %>% inner_join(short_lived_proteins_hl, by = join_by('LeadProt'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot() +
+  geom_histogram(data = f, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'young')) +
+  geom_histogram(data = b, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) +
+  scale_x_continuous(limits = c(7,35)) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 16, family = "Lato"),
+        legend.position = c(0.8,0.9), 
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
+```
+
+long half-lives
+
+```{r}
+#| echo: false
+f <- human_ptms_cyto_young %>% inner_join(long_lived_proteins_hl, by = join_by('LeadProt'))
+b <- human_ptms_cyto_old %>% inner_join(long_lived_proteins_hl, by = join_by('LeadProt'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot() +
+  geom_histogram(data = f, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.3, bw = 0.6) +
+  geom_histogram(data = b, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) + 
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 16, family = "Lato"),
+        legend.position = c(0.8,0.9), 
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
+```

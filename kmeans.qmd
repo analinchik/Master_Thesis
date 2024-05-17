@@ -81,6 +81,10 @@ hl <- rbind(short_lived_proteins_hl, long_lived_proteins_hl)
 
 ```
 
+# K means 
+
+## Complete dataset
+
 ```{r}
 #| echo: false
 # Getting the modification sums
@@ -153,7 +157,6 @@ df <- scale(df_complete)
 distance <- get_dist(df)
 fviz_dist(distance, order = T, show_labels = F, gradient = list(low = "blue", mid = "white", high = "#FC4E07"))
 
-
 set.seed(123)
 fviz_nbclust(df, kmeans, method = "wss", k.max = 25)
 
@@ -173,30 +176,13 @@ print(kmeans_result)
 fviz_cluster(kmeans_result, data = df, ggtheme = theme_classic(), main = NULL, labelsize = 11, geom = c('point'), show.clust.cent = T)
 ```
 
+Evaluation of results:
+
 ```{r}
 #| echo: false
-#| eval: false
-sil_scores <- silhouette(kmeans_result$cluster, dist(df))
 
-# Create a data frame from the silhouette object
-sil_df <- data.frame(cluster = sil_scores[, 1],
-                     silhouette_width = sil_scores[, 3])
-
-# Adding an identifier for each point
-sil_df$id <- seq_along(sil_df$silhouette_width)
-sil_df$cluster <- as.factor(sil_df$cluster)
-sil_df %>% arrange(cluster) %>% 
-  ggplot(aes(x = id, y = silhouette_width, fill = cluster)) +
-  geom_col() +
-  coord_flip() +  # Flips the axes for better visualization
-  labs(x = "Data Point", y = "Silhouette Width",
-       fill = "Cluster", title = "Silhouette Plot of Clustering") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
-
-
-summary(silhouette_scores)
-plot(silhouette_scores)
+summary(kmeans_result)
+plot(kmeans_result)
 ```
 
 Getting the cluster members:
@@ -222,6 +208,527 @@ cluster6 <- df_with_clusters[df_with_clusters$Cluster == 6, ] %>%
   rownames_to_column(var = "UniProt")
 cluster7 <- df_with_clusters[df_with_clusters$Cluster == 7, ] %>%
   rownames_to_column(var = "UniProt")
+cluster8 <- df_with_clusters[df_with_clusters$Cluster == 8, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster9 <- df_with_clusters[df_with_clusters$Cluster == 9, ] %>%
+  rownames_to_column(var = "UniProt")
+```
+
+```{r}
+#| eval: false
+#| echo: false
+write.table(cluster1$UniProt, file = '/Users/anastasialinchik/Downloads/cluster1.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster2$UniProt, file = '/Users/anastasialinchik/Downloads/cluster2.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster3$UniProt, file = '/Users/anastasialinchik/Downloads/cluster3.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster4$UniProt, file = '/Users/anastasialinchik/Downloads/cluster4.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster5$UniProt, file = '/Users/anastasialinchik/Downloads/cluster5.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster6$UniProt, file = '/Users/anastasialinchik/Downloads/cluster6.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster7$UniProt, file = '/Users/anastasialinchik/Downloads/cluster7.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster8$UniProt, file = '/Users/anastasialinchik/Downloads/cluster8.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster9$UniProt, file = '/Users/anastasialinchik/Downloads/cluster9.tsv', row.names = F, sep="\t", quote = F)
+```
+
+Heatmap to see the patterns:
+
+```{r}
+#| echo: false
+cluster_centers <- kmeans_result$centers
+
+# Convert the cluster centers to a data frame
+df_centers <- as.data.frame(cluster_centers)
+
+# Add a column for cluster number
+df_centers$cluster <- rownames(df_centers)
+
+# Reshape the data frame for ggplot2
+df_melt <- melt(df_centers, id.vars = "cluster")
+
+# Create the heatmap using ggplot2
+ggplot(df_melt, aes(y = variable, x = cluster, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(
+       x = "Features",
+       y = "Cluster",
+       fill = NULL) +
+  theme_minimal() +
+  theme()
+```
+
+## B cells cytoplasm
+
+Extra B cells stuff:
+
+```{r}
+human_ptms_cyto_old <- human_complete %>% filter(project_id == 'PXD006570')
+human_ptms_cyto_young <- human_complete %>% filter(project_id == 'PXD006572')
+
+human_ptms_nuc_old <- human_complete %>% filter(project_id == 'PXD006571') 
+human_ptms_nuc_young <- human_complete %>% filter(project_id == 'PXD006576')
+
+Bcells_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/Bcells_hl.tsv', header = T, sep = '\t')
+```
+
+```{r}
+#| echo: false
+# Getting the modification sums
+
+# Variables from human_ptms_cyto_old
+sum_oxPTMs_cyto_old <- human_ptms_cyto_old %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_oxPTMs_cyto_old = sum(counts_norm_abund_len))
+
+sum_AGEs_cyto_old <- human_ptms_cyto_old %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_AGEs_cyto_old = sum(counts_norm_abund_len))
+
+sum_ubiq_cyto_old <- human_ptms_cyto_old %>% filter(unimod_id == 121) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_ubiq_cyto_old = sum(counts_norm_abund_len))
+
+sum_phospho_cyto_old <- human_ptms_cyto_old %>% filter(unimod_id == 21) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_phospho_cyto_old = sum(counts_norm_abund_len))
+
+sum_acetyl_cyto_old <- human_ptms_cyto_old %>% filter(unimod_id == 1) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_acetyl_cyto_old = sum(counts_norm_abund_len))
+
+sum_meth_cyto_old <- human_ptms_cyto_old %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_meth_cyto_old = sum(counts_norm_abund_len))
+
+sum_Kacyl_cyto_old <- human_ptms_cyto_old %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_Kacyl_cyto_old = sum(counts_norm_abund_len))
+
+# Variables from human_ptms_cyto_young
+sum_oxPTMs_cyto_young <- human_ptms_cyto_young %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_oxPTMs_cyto_young = sum(counts_norm_abund_len))
+
+sum_AGEs_cyto_young <- human_ptms_cyto_young %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_AGEs_cyto_young = sum(counts_norm_abund_len))
+
+sum_ubiq_cyto_young <- human_ptms_cyto_young %>% filter(unimod_id == 121) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_ubiq_cyto_young = sum(counts_norm_abund_len))
+
+sum_phospho_cyto_young <- human_ptms_cyto_young %>% filter(unimod_id == 21) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_phospho_cyto_young = sum(counts_norm_abund_len))
+
+sum_acetyl_cyto_young <- human_ptms_cyto_young %>% filter(unimod_id == 1) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_acetyl_cyto_young = sum(counts_norm_abund_len))
+
+sum_meth_cyto_young <- human_ptms_cyto_young %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_meth_cyto_young = sum(counts_norm_abund_len))
+
+sum_Kacyl_cyto_young <- human_ptms_cyto_young %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_Kacyl_cyto_young = sum(counts_norm_abund_len))
+```
+
+Joining everything:
+
+```{r}
+#| echo: false
+# Initial left join with leadprot_uniprot and the sum_acetyl variables
+data <- left_join(leadprot_uniprot, sum_acetyl_cyto_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_acetyl_cyto_young, by = join_by(Uniprot_entry_name))
+
+# Continue left joining with the rest of the variables
+data <- left_join(data, sum_AGEs_cyto_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_AGEs_cyto_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_Kacyl_cyto_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_Kacyl_cyto_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_oxPTMs_cyto_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_oxPTMs_cyto_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_phospho_cyto_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_phospho_cyto_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_ubiq_cyto_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_ubiq_cyto_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_meth_cyto_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_meth_cyto_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, age_proteins, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, mt, by  = join_by(LeadProt))
+data <- left_join(data, Bcells_hl, by  = join_by(LeadProt))
+data <- left_join(data, iupred_scores, by  = join_by('LeadProt' == 'UniProt_ID'))
+```
+
+```{r}
+#| echo: false
+# filling with 0s
+
+# List of column names where you want to replace NA with 0
+
+columns_to_replace <- c(
+  "sum_acetyl_cyto_old", "sum_acetyl_cyto_young",
+  "sum_AGEs_cyto_old", "sum_AGEs_cyto_young",
+  "sum_Kacyl_cyto_old", "sum_Kacyl_cyto_young",
+  "sum_oxPTMs_cyto_old", "sum_oxPTMs_cyto_young",
+  "sum_phospho_cyto_old", "sum_phospho_cyto_young",
+  "sum_ubiq_cyto_old", "sum_ubiq_cyto_young",
+  "sum_meth_cyto_old", "sum_meth_cyto_young"
+)
+
+# Replace NA with 0 in the specified columns
+data[columns_to_replace] <- lapply(data[columns_to_replace], function(x) { x[is.na(x)] <- 0; return(x) })
+```
+
+```{r}
+#| echo: false
+df <- data %>% dplyr::select("Uniprot_entry_name", "sum_acetyl_cyto_old", "sum_acetyl_cyto_young",
+  "sum_AGEs_cyto_old", "sum_AGEs_cyto_young",
+  "sum_Kacyl_cyto_old", "sum_Kacyl_cyto_young",
+  "sum_oxPTMs_cyto_old", "sum_oxPTMs_cyto_young",
+  "sum_phospho_cyto_old", "sum_phospho_cyto_young",
+  "sum_ubiq_cyto_old", "sum_ubiq_cyto_young",
+  "sum_meth_cyto_old", "sum_meth_cyto_young", "ageing_score", "mean_hl_hours", "mean_mt", "Ratio_Above_0.5")
+column_names <- c("sum_acetyl_cyto_old", "sum_acetyl_cyto_young",
+  "sum_AGEs_cyto_old", "sum_AGEs_cyto_young",
+  "sum_Kacyl_cyto_old", "sum_Kacyl_cyto_young",
+  "sum_oxPTMs_cyto_old", "sum_oxPTMs_cyto_young",
+  "sum_phospho_cyto_old", "sum_phospho_cyto_young",
+  "sum_ubiq_cyto_old", "sum_ubiq_cyto_young",
+  "sum_meth_cyto_old", "sum_meth_cyto_young", "ageing_score", "mean_hl_hours", "mean_mt", "ratio")
+rows <- df$Uniprot_entry_name
+df <- data.frame(df, row.names = rows)
+df <- df %>% select(-Uniprot_entry_name)
+names(df) <- column_names
+
+# normalisation
+df_complete <- na.omit(df)
+df <- scale(df_complete)
+
+# distances
+distance <- get_dist(df)
+fviz_dist(distance, order = T, show_labels = F, gradient = list(low = "blue", mid = "white", high = "#FC4E07"))
+
+set.seed(123)
+fviz_nbclust(df, kmeans, method = "wss", k.max = 30)
+
+# Set the number of clusters
+num_clusters <- 21
+
+# k-means clustering
+kmeans_result <- kmeans(df, centers = num_clusters, nstart = 25)
+
+# View the results
+print(kmeans_result)
+```
+
+```{r}
+#| echo: false
+# Using factoextra to visualize clusters
+fviz_cluster(kmeans_result, data = df, ggtheme = theme_classic(), main = NULL, labelsize = 11, geom = c('point'), show.clust.cent = T)
+```
+
+Evaluation of results:
+
+```{r}
+#| echo: false
+
+summary(kmeans_result)
+plot(kmeans_result$withinss)
+```
+
+Getting the cluster members:
+
+```{r}
+#| echo: false
+clusters <- kmeans_result$cluster
+# Create a data frame with cluster assignments
+df_with_clusters <- data.frame(df, Cluster = clusters)
+
+# Get members of Cluster 1
+cluster1 <- df_with_clusters[df_with_clusters$Cluster == 1, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster2 <- df_with_clusters[df_with_clusters$Cluster == 2, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster3 <- df_with_clusters[df_with_clusters$Cluster == 3, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster4 <- df_with_clusters[df_with_clusters$Cluster == 4, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster5 <- df_with_clusters[df_with_clusters$Cluster == 5, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster6 <- df_with_clusters[df_with_clusters$Cluster == 6, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster7 <- df_with_clusters[df_with_clusters$Cluster == 7, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster8 <- df_with_clusters[df_with_clusters$Cluster == 8, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster9 <- df_with_clusters[df_with_clusters$Cluster == 9, ] %>%
+  rownames_to_column(var = "UniProt")
+```
+
+```{r}
+#| eval: false
+#| echo: false
+write.table(cluster1$UniProt, file = '/Users/anastasialinchik/Downloads/cluster1.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster2$UniProt, file = '/Users/anastasialinchik/Downloads/cluster2.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster3$UniProt, file = '/Users/anastasialinchik/Downloads/cluster3.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster4$UniProt, file = '/Users/anastasialinchik/Downloads/cluster4.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster5$UniProt, file = '/Users/anastasialinchik/Downloads/cluster5.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster6$UniProt, file = '/Users/anastasialinchik/Downloads/cluster6.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster7$UniProt, file = '/Users/anastasialinchik/Downloads/cluster7.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster8$UniProt, file = '/Users/anastasialinchik/Downloads/cluster8.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster9$UniProt, file = '/Users/anastasialinchik/Downloads/cluster9.tsv', row.names = F, sep="\t", quote = F)
+```
+
+Heatmap to see the patterns:
+
+```{r}
+#| echo: false
+cluster_centers <- kmeans_result$centers
+
+# Convert the cluster centers to a data frame
+df_centers <- as.data.frame(cluster_centers)
+
+# Add a column for cluster number
+df_centers$cluster <- rownames(df_centers)
+df_centers$cluster_size <- kmeans_result$size
+df_centers <- df_centers %>% filter(cluster_size >10)
+# Reshape the data frame for ggplot2
+df_melt <- melt(df_centers[,1:19], id.vars = "cluster")
+
+# Create the heatmap using ggplot2
+ggplot(df_melt, aes(y = variable, x = cluster, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(
+       x = "Features",
+       y = "Cluster",
+       fill = NULL) +
+  theme_minimal() +
+  theme()
+```
+
+## B cells nucleus
+
+```{r}
+#| echo: false
+# Getting the modification sums
+
+# Variables from human_ptms_nuc_old
+sum_oxPTMs_nuc_old <- human_ptms_nuc_old %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_oxPTMs_nuc_old = sum(counts_norm_abund_len))
+
+sum_AGEs_nuc_old <- human_ptms_nuc_old %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_AGEs_nuc_old = sum(counts_norm_abund_len))
+
+sum_ubiq_nuc_old <- human_ptms_nuc_old %>% filter(unimod_id == 121) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_ubiq_nuc_old = sum(counts_norm_abund_len))
+
+sum_phospho_nuc_old <- human_ptms_nuc_old %>% filter(unimod_id == 21) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_phospho_nuc_old = sum(counts_norm_abund_len))
+
+sum_acetyl_nuc_old <- human_ptms_nuc_old %>% filter(unimod_id == 1) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_acetyl_nuc_old = sum(counts_norm_abund_len))
+
+sum_meth_nuc_old <- human_ptms_nuc_old %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_meth_nuc_old = sum(counts_norm_abund_len))
+
+sum_Kacyl_nuc_old <- human_ptms_nuc_old %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_Kacyl_nuc_old = sum(counts_norm_abund_len))
+
+# Variables from human_ptms_nuc_young
+sum_oxPTMs_nuc_young <- human_ptms_nuc_young %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_oxPTMs_nuc_young = sum(counts_norm_abund_len))
+
+sum_AGEs_nuc_young <- human_ptms_nuc_young %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_AGEs_nuc_young = sum(counts_norm_abund_len))
+
+sum_ubiq_nuc_young <- human_ptms_nuc_young %>% filter(unimod_id == 121) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_ubiq_nuc_young = sum(counts_norm_abund_len))
+
+sum_phospho_nuc_young <- human_ptms_nuc_young %>% filter(unimod_id == 21) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_phospho_nuc_young = sum(counts_norm_abund_len))
+
+sum_acetyl_nuc_young <- human_ptms_nuc_young %>% filter(unimod_id == 1) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_acetyl_nuc_young = sum(counts_norm_abund_len))
+
+sum_meth_nuc_young <- human_ptms_nuc_young %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_meth_nuc_young = sum(counts_norm_abund_len))
+
+sum_Kacyl_nuc_young <- human_ptms_nuc_young %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') %>% group_by(Uniprot_entry_name) %>%
+  summarise(sum_Kacyl_nuc_young = sum(counts_norm_abund_len))
+```
+
+Joining everything:
+
+```{r}
+#| echo: false
+# Initial left join with leadprot_uniprot and the sum_acetyl variables
+data <- left_join(leadprot_uniprot, sum_acetyl_nuc_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_acetyl_nuc_young, by = join_by(Uniprot_entry_name))
+
+# Continue left joining with the rest of the variables
+data <- left_join(data, sum_AGEs_nuc_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_AGEs_nuc_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_Kacyl_nuc_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_Kacyl_nuc_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_oxPTMs_nuc_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_oxPTMs_nuc_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_phospho_nuc_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_phospho_nuc_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_ubiq_nuc_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_ubiq_nuc_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, sum_meth_nuc_old, by = join_by(Uniprot_entry_name))
+data <- left_join(data, sum_meth_nuc_young, by = join_by(Uniprot_entry_name))
+
+data <- left_join(data, age_proteins, by  = join_by(Uniprot_entry_name))
+data <- left_join(data, mt, by  = join_by(LeadProt))
+data <- left_join(data, Bcells_hl, by  = join_by(LeadProt))
+data <- left_join(data, iupred_scores, by  = join_by('LeadProt' == 'UniProt_ID'))
+```
+
+```{r}
+#| echo: false
+# filling with 0s
+
+# List of column names where you want to replace NA with 0
+
+columns_to_replace <- c(
+  "sum_acetyl_nuc_old", "sum_acetyl_nuc_young",
+  "sum_AGEs_nuc_old", "sum_AGEs_nuc_young",
+  "sum_Kacyl_nuc_old", "sum_Kacyl_nuc_young",
+  "sum_oxPTMs_nuc_old", "sum_oxPTMs_nuc_young",
+  "sum_phospho_nuc_old", "sum_phospho_nuc_young",
+  "sum_ubiq_nuc_old", "sum_ubiq_nuc_young",
+  "sum_meth_nuc_old", "sum_meth_nuc_young"
+)
+
+# Replace NA with 0 in the specified columns
+data[columns_to_replace] <- lapply(data[columns_to_replace], function(x) { x[is.na(x)] <- 0; return(x) })
+```
+
+```{r}
+#| echo: false
+df <- data %>% dplyr::select("Uniprot_entry_name", "sum_acetyl_nuc_old", "sum_acetyl_nuc_young",
+  "sum_AGEs_nuc_old", "sum_AGEs_nuc_young",
+  "sum_Kacyl_nuc_old", "sum_Kacyl_nuc_young",
+  "sum_oxPTMs_nuc_old", "sum_oxPTMs_nuc_young",
+  "sum_phospho_nuc_old", "sum_phospho_nuc_young",
+  "sum_ubiq_nuc_old", "sum_ubiq_nuc_young",
+  "sum_meth_nuc_old", "sum_meth_nuc_young", "ageing_score", "mean_hl_hours", "mean_mt", "Ratio_Above_0.5")
+column_names <- c("sum_acetyl_nuc_old", "sum_acetyl_nuc_young",
+  "sum_AGEs_nuc_old", "sum_AGEs_nuc_young",
+  "sum_Kacyl_nuc_old", "sum_Kacyl_nuc_young",
+  "sum_oxPTMs_nuc_old", "sum_oxPTMs_nuc_young",
+  "sum_phospho_nuc_old", "sum_phospho_nuc_young",
+  "sum_ubiq_nuc_old", "sum_ubiq_nuc_young",
+  "sum_meth_nuc_old", "sum_meth_nuc_young", "ageing_score", "mean_hl_hours", "mean_mt", "ratio")
+rows <- df$Uniprot_entry_name
+df <- data.frame(df, row.names = rows)
+df <- df %>% select(-Uniprot_entry_name)
+names(df) <- column_names
+
+# normalisation
+df_complete <- na.omit(df)
+df <- scale(df_complete)
+
+# distances
+distance <- get_dist(df)
+fviz_dist(distance, order = T, show_labels = F, gradient = list(low = "blue", mid = "white", high = "#FC4E07"))
+
+set.seed(123)
+fviz_nbclust(df, kmeans, method = "wss", k.max = 30)
+
+# Set the number of clusters
+num_clusters <- 15
+
+# k-means clustering
+kmeans_result <- kmeans(df, centers = num_clusters, nstart = 25)
+
+# View the results
+print(kmeans_result)
+```
+
+```{r}
+#| echo: false
+# Using factoextra to visualize clusters
+fviz_cluster(kmeans_result, data = df, ggtheme = theme_classic(), main = NULL, labelsize = 11, geom = c('point'), show.clust.cent = T)
+```
+
+Evaluation of results:
+
+```{r}
+#| echo: false
+
+summary(kmeans_result)
+plot(kmeans_result$withinss)
+```
+
+Getting the cluster members:
+
+```{r}
+#| echo: false
+clusters <- kmeans_result$cluster
+# Create a data frame with cluster assignments
+df_with_clusters <- data.frame(df, Cluster = clusters)
+
+# Get members of Cluster 1
+cluster1 <- df_with_clusters[df_with_clusters$Cluster == 1, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster2 <- df_with_clusters[df_with_clusters$Cluster == 2, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster3 <- df_with_clusters[df_with_clusters$Cluster == 3, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster4 <- df_with_clusters[df_with_clusters$Cluster == 4, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster5 <- df_with_clusters[df_with_clusters$Cluster == 5, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster6 <- df_with_clusters[df_with_clusters$Cluster == 6, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster7 <- df_with_clusters[df_with_clusters$Cluster == 7, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster8 <- df_with_clusters[df_with_clusters$Cluster == 8, ] %>%
+  rownames_to_column(var = "UniProt")
+cluster9 <- df_with_clusters[df_with_clusters$Cluster == 9, ] %>%
+  rownames_to_column(var = "UniProt")
+```
+
+```{r}
+#| eval: false
+#| echo: false
+write.table(cluster1$UniProt, file = '/Users/anastasialinchik/Downloads/cluster1.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster2$UniProt, file = '/Users/anastasialinchik/Downloads/cluster2.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster3$UniProt, file = '/Users/anastasialinchik/Downloads/cluster3.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster4$UniProt, file = '/Users/anastasialinchik/Downloads/cluster4.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster5$UniProt, file = '/Users/anastasialinchik/Downloads/cluster5.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster6$UniProt, file = '/Users/anastasialinchik/Downloads/cluster6.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster7$UniProt, file = '/Users/anastasialinchik/Downloads/cluster7.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster8$UniProt, file = '/Users/anastasialinchik/Downloads/cluster8.tsv', row.names = F, sep="\t", quote = F)
+write.table(cluster9$UniProt, file = '/Users/anastasialinchik/Downloads/cluster9.tsv', row.names = F, sep="\t", quote = F)
+```
+
+Heatmap to see the patterns:
+
+```{r}
+#| echo: false
+cluster_centers <- kmeans_result$centers
+
+# Convert the cluster centers to a data frame
+df_centers <- as.data.frame(cluster_centers)
+
+# Add a column for cluster number
+df_centers$cluster <- rownames(df_centers)
+df_centers$cluster_size <- kmeans_result$size
+df_centers <- df_centers %>% filter(cluster_size >7)
+# Reshape the data frame for ggplot2
+df_melt <- melt(df_centers[,1:19], id.vars = "cluster")
+
+# Create the heatmap using ggplot2
+ggplot(df_melt, aes(y = variable, x = cluster, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(
+       x = "Features",
+       y = "Cluster",
+       fill = NULL) +
+  theme_minimal() +
+  theme()
 ```
 
 # PCA
@@ -238,8 +745,6 @@ summary(pca_result)
 pca_result$rotation
 
 # Plot Scree Plot to check explained variance by each component
-screeplot(pca_result, type = "lines", main = "Scree Plot")
-
-# Optional: Visualize PCA results using biplot
-biplot(pca_result, main = "PCA Biplot")
+fviz_eig(pca_result, geom = 'line', main = '') +
+  theme_classic()
 ```

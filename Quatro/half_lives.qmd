@@ -105,35 +105,6 @@ ggplot() +
         axis.title = element_text(size = 16, family = "Lato"))
 ```
 
-```{r}
-#| echo: false
-#| eval: false
-
-# This is to check the proteins present in a particular half-life interval:
-df <- human_ptms_hl_short %>% filter(mean_hl_hours > 15 & mean_hl_hours < 20) %>% group_by(Uniprot_entry_name) %>% summarise(sum_norm_counts = sum(norm_counts)) %>% arrange(desc(sum_norm_counts)) 
-
-ggplot(df[1:5,], aes(x = reorder(Uniprot_entry_name, -sum_norm_counts), y = sum_norm_counts)) +
-  geom_col() +
-  labs(x = 'UniProt accession', y = 'Sum of normalised counts') +
-  theme_classic()
-```
-
-```{r}
-#| echo: false
-#| eval: false
-
-# These are the modifications for a particular protein: 
-hspb1 <- inner_join(human_ptms, short_lived_proteins_hl, by = join_by(LeadProt)) %>% filter(Uniprot_entry_name == 'HSPB1_HUMAN') %>% group_by(ptm_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% arrange(desc(sum))
-
-ggplot(hspb1[1:10,], aes(y = reorder(ptm_name, sum), x = sum)) +
-  geom_col(fill = '#919191') +
-  labs(x = 'Sum of the normalised PSM counts', y = 'Modification [unimod ID]') +
-  theme_classic() +
-  theme(
-        axis.text = element_text(size = 16, family = "Lato"),  
-        axis.title = element_text(size = 16, family = "Lato"))
-```
-
 ## Outliers
 
 I want to remove the proteins with a very high number of log10(counts_norm_abund_len).
@@ -187,6 +158,8 @@ The outliers have been removed now. What is the resulting distribution?
 ggplot() +
   geom_density(data = short_lived_proteins_hl, aes(x = mean_hl_hours, fill = 'Data found by Li et al.'), alpha = 0.7, bw = 0.6) +
   geom_density(data = human_ptms_hl_short, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'Re-processed dataset'), alpha = 0.7, bw = 0.6) + 
+  geom_vline(xintercept = 8) +
+  geom_vline(xintercept = 11) +
   labs(x = 'Mean half-lives (hours)', y = 'Density') +
   theme_classic() +
   scale_fill_manual(values = c("white", '#919191'),breaks = c('Data found by Li et al.', 'Re-processed dataset') ,name = 'Key') +
@@ -197,40 +170,55 @@ ggplot() +
         axis.title = element_text(size = 16, family = "Lato"))
 ```
 
-**SRRM2_HUMAN**
+Looking in more detail
 
-2752 amino acids.
+What are the most modified proteins?
 
-There is a huge peak if you look at the data that is only normalised by the number of raw files.
+```{r}
+mod <- human_ptms_hl_short %>% 
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum = sum(counts_norm_abund_len)) %>% 
+  arrange(desc(sum))
 
-Looking at SRRM2_HUMAN in more detail.
+mod[1:5,]
+```
+
+Looking at a particular half-life range:
 
 ```{r}
 #| echo: false
 #| eval: false
-df <- human_ptms_hl_short %>% filter(mean_hl_hours > 20 & mean_hl_hours < 25) %>% group_by(Uniprot_entry_name) %>% summarise(sum_norm_counts = sum(norm_counts)) %>% arrange(desc(sum_norm_counts)) 
 
-ggplot(df[1:5,], aes(x = reorder(Uniprot_entry_name, -sum_norm_counts), y = sum_norm_counts)) +
+# This is to check the proteins present in a particular half-life interval:
+df <- human_ptms_hl_short %>% filter(mean_hl_hours > 8 & mean_hl_hours < 11) %>% group_by(Uniprot_entry_name) %>% summarise(sum_norm_counts = sum(counts_norm_abund_len)) %>% arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:50,], aes(x = reorder(Uniprot_entry_name, -sum_norm_counts), y = sum_norm_counts)) +
   geom_col() +
   labs(x = 'UniProt accession', y = 'Sum of normalised counts') +
   theme_classic()
 ```
 
-What are the most common modifications in this protein?
+```{r}
+write.table(df$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/proteins.tsv', row.names = F, sep="\t", quote = F)
+```
 
 ```{r}
 #| echo: false
 #| eval: false
-df <- human_ptms_hl_short %>% filter(Uniprot_entry_name == 'SRRM2_HUMAN') %>%
-  group_by(ptm_name) %>%
-  summarise(sum_counts = sum(norm_counts)) %>% arrange(desc(sum_counts))
 
-ggplot(df[1:10,], aes(x = reorder(ptm_name, sum_counts), y = sum_counts)) +
-  geom_col() +
-  coord_flip() +
-  labs(x = 'Sum of normalised counts', y = 'UNIMOD modifications') +
-  theme_classic()
+# These are the modifications for a particular protein: 
+hspb1 <- inner_join(human_ptms, short_lived_proteins_hl, by = join_by(LeadProt)) %>% filter(Uniprot_entry_name == 'EAPP_HUMAN') %>% group_by(ptm_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+ggplot(hspb1[1:10,], aes(y = reorder(ptm_name, sum), x = sum)) +
+  geom_col(fill = '#919191') +
+  labs(x = 'Sum of the normalised PSM counts', y = 'Modification [unimod ID]') +
+  theme_classic() +
+  theme(
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
 ```
+
+## 
 
 ## PTMs
 
@@ -300,6 +288,7 @@ Comparison
 #| echo: false
 #| warning: false
 #| message: false
+
 p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_hl_hours, mod_group) %>%
 distinct(Uniprot_entry_name, mean_hl_hours, mod_group, sum) 
 p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_hl_hours, mod_group) %>%
@@ -316,11 +305,19 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
 ```
 
-Testing whether the half-lives between groups are significantly different. Wilcoxon test (note that the sample sizes are uneven). The p value was adjusted using the formula p/sqrt(N/100), where N = n1+ n2.
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+Testing whether the half-lives between groups are significantly different. Wilcoxon test (note that the sample sizes are uneven). The p value was adjusted using the formula p\*sqrt(N/100), where N = n1+ n2.
 
 ```{r}
 #| echo: false
@@ -332,66 +329,22 @@ design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest (from the group of KruskalWallis tests. But for 2 groups, it is equal to the Mann–Whitney U test)
 
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off (Good\'s Bayes adjustment)')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('adjusted p-value (Good\'s Bayes adjustment)')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
-Enriched proteins in both datasets:
-
 ```{r}
-#| echo: false
-#| eval: false
-df1 <- human_ptms_hl_mod_group %>% filter(mod_group == 'Phosphorylated')
-df2 <- human_ptms_hl_mod_group %>% filter(mod_group == 'Unphosphorylated')
+# This is to check the proteins present in a particular half-life interval:
+df <- p1 %>% filter(mean_hl_hours > 6 & mean_hl_hours < 10) %>%  arrange(desc(sum)) 
 
-# Aggregating normalized counts for df1
-df1_aggregated <- df1 %>%
-  group_by(LeadProt) %>%
-  summarise(total_count = sum(counts_norm_abund_len))
-
-# Aggregating normalized counts for df2
-df2_aggregated <- df2 %>%
-  group_by(LeadProt) %>%
-  summarise(total_count = sum(counts_norm_abund_len))
-
-# Merging the two datasets
-merged_data <- merge(df1_aggregated, df2_aggregated, by = "LeadProt", suffixes = c("_df1", "_df2"))
-
-# Calculating fold change
-merged_data <- merged_data %>%
-  mutate(mean_count_df1 = total_count_df1 / sum(df1$counts_norm_abund_len),
-         mean_count_df2 = total_count_df2 / sum(df2$counts_norm_abund_len)) %>%
-  mutate(fold_change = mean_count_df1 / mean_count_df2)
-
-# Defining enriched proteins in df1
-enriched_in_df1 <- merged_data %>%
-  filter(fold_change >= 2)
-
-# Defining enriched proteins in df2
-enriched_in_df2 <- merged_data %>%
-  filter(fold_change <= 0.5) # Fold change of less than 1/2 indicates enrichment in df2
-
-enriched_in_df1 <- inner_join(enriched_in_df1, leadprot_uniprot, by = 'LeadProt') 
-enriched_in_df1 <- inner_join(enriched_in_df1, short_lived_proteins_hl, by = 'LeadProt')
-
-enriched_in_df2 <- inner_join(enriched_in_df2, leadprot_uniprot, by = 'LeadProt') 
-enriched_in_df2 <- inner_join(enriched_in_df2, short_lived_proteins_hl, by = 'LeadProt')
-
-#write.table(enriched, file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/enriched.tsv', row.names = F, sep="\t", quote = F)
-```
-
-Proteins that are only present in one of the dataframes.
-
-```{r}
-#| echo: false
-#| eval: false
-# List proteins unique to df1 = not phosphorylated
-unique_df1 <- setdiff(df1$Uniprot_entry_name, df2$Uniprot_entry_name)
-
-# List proteins unique to df2 = not phosphorylated
-unique_df2 <- setdiff(df2$Uniprot_entry_name, df1$Uniprot_entry_name)
+ggplot(df[1:7,], aes(x = reorder(Uniprot_entry_name, -sum), y = sum)) +
+  geom_col() +
+  labs(x = 'UniProt accession', y = 'Sum of normalised counts') +
+  theme_classic()
 ```
 
 ### Acetylation
@@ -442,8 +395,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -452,10 +413,12 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### Ubiquitination
@@ -474,9 +437,9 @@ human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id =
 
 human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-ubiquitinated", "Ubiquitinated"))
 
-# all of the proteins that get oxidised
+# all of the proteins that get ubiquitinated
 ubi_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Ubiquitinated') %>% dplyr::select(LeadProt) %>% distinct()
-# those proteins that get oxidised are not included in the non-oxi section
+# those proteins that get ubiquitinated are not included in the non-oxi section
 human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Ubiquitinated' | (mod_group == 'Non-ubiquitinated' & (!LeadProt %in% ubi_prot$LeadProt)))
 
 ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
@@ -510,8 +473,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -520,10 +491,12 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### Methylation
@@ -577,8 +550,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -587,60 +568,12 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
-```
-
-Enrichment:
-
-```{r}
-#| echo: false
-#| eval: false
-df1 <- human_ptms_hl_mod_group %>% filter(mod_group == 'Meth')
-df2 <- human_ptms_hl_mod_group %>% filter(mod_group == 'Non-Meth')
-
-df1_aggregated <- df1 %>%
-  group_by(LeadProt) %>%
-  summarise(total_count = sum(counts_norm_abund_len))
-
-# Aggregating normalized counts for df2
-df2_aggregated <- df2 %>%
-  group_by(LeadProt) %>%
-  summarise(total_count = sum(norm_counts))
-
-# Merging the two datasets
-merged_data <- merge(df1_aggregated, df2_aggregated, by = "LeadProt", suffixes = c("_df1", "_df2"))
-
-# Calculating fold change
-
-merged_data <- merged_data %>%
-  mutate(mean_count_df1 = total_count_df1 / sum(df1$norm_count),
-         mean_count_df2 = total_count_df2 / sum(df2$norm_count)) %>%
-  mutate(fold_change = mean_count_df1 / mean_count_df2)
-
-# Defining enriched proteins in df1
-enriched_in_df1 <- merged_data %>%
-  filter(fold_change >= 2)
-
-# Defining enriched proteins in df2
-enriched_in_df2 <- merged_data %>%
-  filter(fold_change <= 0.5) # Fold change of less than 1/2 indicates enrichment in df2
-
-enriched_in_df1 <- inner_join(enriched_in_df1, leadprot_uniprot, by = 'LeadProt') 
-enriched_in_df1 <- inner_join(enriched_in_df1, short_lived_proteins_hl, by = 'LeadProt')
-
-enriched_in_df2 <- inner_join(enriched_in_df2, leadprot_uniprot, by = 'LeadProt') 
-enriched_in_df2 <- inner_join(enriched_in_df2, short_lived_proteins_hl, by = 'LeadProt')
-```
-
-```{r}
-#| echo: false
-#| eval: false
-histones <- read.csv(file = '/Users/anastasialinchik/Downloads/idmapping_2024_04_30.tsv', header = T, sep = '\t')
-histones
-inner_join(histones, human_complete, by = join_by('Entry' == 'LeadProt'))
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### oxPTMs
@@ -651,14 +584,30 @@ All PTMs related to oxidative damage in general, not only oxidation.
 
 ```{r}
 #| echo: false
+#| eval: false
+a <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-oxPTMs') %>% dplyr::select(Uniprot_entry_name)
+human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'oxPTMs') %>% filter(Uniprot_entry_name %in% a$Uniprot_entry_name)
+```
+
+```{r}
+#| echo: false
 #| include: false
-human_ptms_hl_mod_group <- human_complete_hl_short 
+
+oxPTMs_prot <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% inner_join(short_lived_proteins_hl, by = join_by(LeadProt))
+dim(oxPTMs_prot)
+human_ptms_hl_mod_group <- human_ptms_hl_short
+dim(human_ptms_hl_mod_group)
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, oxPTMs_prot)
 
 human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% oxPTMs$unimod_id & human_ptms_hl_mod_group$ptm_res %in% oxPTMs$AAs_list), 'oxPTMs', 'Non-oxPTMs')
 
 human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-oxPTMs", "oxPTMs"))
-
-human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-oxPTMs' & ptm_class == 'Post-translational') | mod_group == 'oxPTMs')
+dim(human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs'))
+dim(human_ptms_hl_mod_group %>% filter(mod_group == 'Non-oxPTMs'))
+# all of the proteins that get oxPTMs
+oxPTMs_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get oxPTMs are not included in the non-oxPTMs section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs' | (mod_group == 'Non-oxPTMs' & (!LeadProt %in% oxPTMs_prot$LeadProt)))
 
 ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_density(alpha = 0.7, bw = 1) + 
@@ -686,8 +635,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -696,10 +653,12 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### Lysine acylations
@@ -707,13 +666,20 @@ print('P-value cut-off')
 ```{r}
 #| echo: false
 #| include: false
-human_ptms_hl_mod_group <- human_complete_hl_short 
+
+Kacylation_prot <- human_complete %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') %>% inner_join(short_lived_proteins_hl, by = join_by(LeadProt))
+
+human_ptms_hl_mod_group <- human_ptms_hl_short
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, Kacylation_prot)
 
 human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% lysine_acylation & human_ptms_hl_mod_group$ptm_res == 'K'), 'K acylation', 'Non-acylated')
 
 human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-acylated", "K acylation"))
 
-human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-acylated' & ptm_class == 'Post-translational') | mod_group == 'K acylation')
+# all of the proteins that get K acylated
+Kacylation_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'K acylation') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get K acylated are not included in the non-acylated section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'K acylation' | (mod_group == 'Non-acylated' & (!LeadProt %in% Kacylation_prot$LeadProt)))
 
 ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_density(alpha = 0.7, bw = 1) + 
@@ -743,8 +709,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -753,10 +727,12 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### AGEs
@@ -764,13 +740,20 @@ print('P-value cut-off')
 ```{r}
 #| echo: false
 #| include: false
-human_ptms_hl_mod_group <- human_complete_hl_short 
+
+AGEs_prot <- human_complete %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% inner_join(short_lived_proteins_hl, by = join_by(LeadProt))
+
+human_ptms_hl_mod_group <- human_ptms_hl_short
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, AGEs_prot)
 
 human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% AGE & human_ptms_hl_mod_group$ptm_res == 'K'), 'AGEs', 'Non-AGEs')
 
 human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-AGEs", "AGEs"))
 
-human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-AGEs' & ptm_class == 'Post-translational') | mod_group == 'AGEs')
+# all of the proteins that get K acylated
+AGEs_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'AGEs') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get K acylated are not included in the non-acylated section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'AGEs' | (mod_group == 'Non-AGEs' & (!LeadProt %in% AGEs_prot$LeadProt)))
 
 ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_density(alpha = 0.7, bw = 1) + 
@@ -800,8 +783,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -810,10 +801,12 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ## Binning
@@ -1011,6 +1004,79 @@ human_ptms_hl_short %>% filter(mean_hl_hours > 5 & mean_hl_hours< 10) %>% inner_
   mutate(counts_norm_abund = norm_counts/abundance) %>% group_by(Uniprot_entry_name) %>% summarise(sum_counts = sum(counts_norm_abund)) %>% arrange(desc(sum_counts))
 ```
 
+# Binning by the number of PTMs
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+bins <- human_ptms_hl_short %>% group_by(Uniprot_entry_name) %>% summarise(mean_hl_hours, sum_norm_counts = sum(counts_norm_abund_len)) %>% distinct() %>% arrange(desc(sum_norm_counts))
+bound <- dim(bins)[1]
+bin1 <- bins[1:as.integer(bound/3), ]
+bin2 <- bins[as.integer(bound/3 + 1):as.integer(bound/3*2), ]
+bin3 <- bins[as.integer(bound/3*2+1):bound, ]
+
+bin1$bin <- 'High'
+bin2$bin <- 'Medium'
+bin3$bin <- 'Low'
+
+bins <- rbind(bin1, bin2, bin3)
+bins$bin <- factor(bins$bin, levels = c("Low", "Medium", "High"))
+ggplot(bins, aes(x = mean_hl_hours)) +
+  geom_histogram(fill = '#919191') +
+  labs(x = 'Half-life (hours)', y = 'Protein counts') +
+  facet_wrap(~bin) +
+  theme_bw() +
+  theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(size = 13, family = "Lato"),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"),
+        strip.background.x = element_blank()
+        )
+```
+
+```{r}
+#| echo: false
+ks_test_result <- ks.test(bin1$mean_hl_hours, bin3$mean_hl_hours)
+
+# Print the test result
+print(ks_test_result)
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| eval: false
+bins <- bin3
+bound <- dim(bins)[1]
+bin1 <- bins[1:as.integer(bound/3), ]
+bin2 <- bins[as.integer(bound/3 + 1):as.integer(bound/3*2), ]
+bin3 <- bins[as.integer(bound/3*2+1):bound, ]
+
+bin1$bin <- 'High'
+bin2$bin <- 'Medium'
+bin3$bin <- 'Low'
+
+bins <- rbind(bin1, bin2, bin3)
+bins$bin <- factor(bins$bin, levels = c("Low", "Medium", "High"))
+ggplot(bins, aes(x = mean_hl_hours)) +
+  geom_histogram(fill = '#919191') +
+  labs(x = 'Half-life (hours)', y = 'Protein counts') +
+  facet_wrap(~bin) +
+  theme_bw() +
+  theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(size = 13, family = "Lato"),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"),
+        strip.background.x = element_blank()
+        )
+```
+
 # Proteins with a long half-life
 
 Long-lived proteins can be used as estimators of chronological age. Long-lived proteins can be defined in different ways, for example based on the half-life of the protein when compared to the average half-life of proteins in the organism. In this case, long-lived proteins were obtained from the following study: [paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3788602/). Proteins were classified as long-lived based on their degree of degradation during the experiment and therefore it was possible to discover new long-lived proteins (no *a priori* assumptions were made).
@@ -1040,10 +1106,10 @@ ggplot() +
   scale_x_continuous(limits = c(0,1000)) +
   scale_fill_manual(values = c("white", '#919191'),breaks = c('Data found by Mathieson et al.', 'Re-processed dataset') ,name = 'Key') +
   theme(legend.title = element_blank(),
-        legend.text = element_text(size = 16, family = "Lato"),
-        legend.position = c(0.75,0.9), 
-        axis.text = element_text(size = 16, family = "Lato"),  
-        axis.title = element_text(size = 16, family = "Lato"))
+        legend.text = element_text(size = 14, family = "Lato"),
+        legend.position = c(0.7,0.9), 
+        axis.text = element_text(size = 14, family = "Lato"),  
+        axis.title = element_text(size = 14, family = "Lato"))
 ```
 
 ## Outliers
@@ -1229,18 +1295,70 @@ ggplot(human_complete_hl_long, aes(mean_hl_hours)) +
 #| echo: false
 #| warning: false
 ggplot() +
-  geom_density(data = long_lived_proteins_hl, aes(x = mean_hl_hours, fill = 'Data found by Mathieson et al.'), alpha = 0.7, bw = 7) +
-  geom_density(data = human_ptms_hl_long, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'Re-processed dataset'), alpha = 0.7, bw = 7) + 
+  geom_density(data = long_lived_proteins_hl, aes(x = mean_hl_hours, fill = 'Data found by Mathieson et al.'), alpha = 0.7, bw = 5) +
+  geom_density(data = human_ptms_hl_long, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'Re-processed dataset'), alpha = 0.7, bw = 5) + 
+  geom_vline(xintercept = 30) +
+  geom_vline(xintercept = 100) +
   scale_x_continuous(limits = c(0,max(human_ptms_hl_long$mean_hl_hours))) +
   labs(x = 'Mean half-lives (hours)', y = 'Density') +
   theme_classic() +
   scale_fill_manual(values = c("white", '#919191'),breaks = c('Data found by Mathieson et al.', 'Re-processed dataset') ,name = 'Key') +
   theme(legend.title = element_blank(),
-        legend.text = element_text(size = 16, family = "Lato"),
+        legend.text = element_text(size = 14, family = "Lato"),
         legend.position = c(0.75,0.9), 
+        axis.text = element_text(size = 14, family = "Lato"),  
+        axis.title = element_text(size = 14, family = "Lato"))
+```
+
+Looking in more detail
+
+What are the most modified proteins?
+
+```{r}
+mod <- human_ptms_hl_short %>% 
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum = sum(counts_norm_abund_len)) %>% 
+  arrange(desc(sum))
+
+mod[1:5,]
+```
+
+Looking at a particular half-life range:
+
+```{r}
+#| echo: false
+#| eval: false
+
+# This is to check the proteins present in a particular half-life interval:
+df <- human_ptms_hl_long %>% filter(mean_hl_hours > 300 & mean_hl_hours < 500) %>% group_by(Uniprot_entry_name) %>% summarise(sum_norm_counts = sum(counts_norm_abund_len)) %>% arrange(desc(sum_norm_counts)) 
+
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, -sum_norm_counts), y = sum_norm_counts)) +
+  geom_col() +
+  labs(x = 'UniProt accession', y = 'Sum of normalised counts') +
+  theme_classic()
+```
+
+```{r}
+write.table(df$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/proteins.tsv', row.names = F, sep="\t", quote = F)
+```
+
+```{r}
+#| echo: false
+#| eval: false
+
+# These are the modifications for a particular protein: 
+hspb1 <- inner_join(human_ptms, short_lived_proteins_hl, by = join_by(LeadProt)) %>% filter(Uniprot_entry_name == 'EAPP_HUMAN') %>% group_by(ptm_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+ggplot(hspb1[1:10,], aes(y = reorder(ptm_name, sum), x = sum)) +
+  geom_col(fill = '#919191') +
+  labs(x = 'Sum of the normalised PSM counts', y = 'Modification [unimod ID]') +
+  theme_classic() +
+  theme(
         axis.text = element_text(size = 16, family = "Lato"),  
         axis.title = element_text(size = 16, family = "Lato"))
 ```
+
+## 
 
 ## PTMs
 
@@ -1249,6 +1367,7 @@ ggplot() +
 ```{r}
 #| echo: false
 #| warning: false
+#| include: false
 
 human_ptms_hl_mod_group <- human_ptms_hl_long
 human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_long$unimod_id == 21, 'Phosphorylated', 'Non-phosphorylated')
@@ -1278,6 +1397,7 @@ Violin plot:
 ```{r}
 #| echo: false
 #| warning: false
+
 p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_hl_hours, mod_group) %>%
 distinct(Uniprot_entry_name, mean_hl_hours, mod_group, sum) 
 p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_hl_hours, mod_group) %>%
@@ -1294,8 +1414,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -1304,16 +1432,29 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
+```
+
+```{r}
+# This is to check the proteins present in a particular half-life interval:
+df <- p1 %>%  arrange(desc(sum)) 
+
+ggplot(df[1:7,], aes(x = reorder(Uniprot_entry_name, -sum), y = sum)) +
+  geom_col() +
+  labs(x = 'UniProt accession', y = 'Sum of normalised counts') +
+  theme_classic()
 ```
 
 ### Acetylation
 
 ```{r}
 #| echo: false
+#| include: false
 human_ptms_hl_mod_group <- human_ptms_hl_long 
 human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 1, 'Acetylated', 'Non-acetylated')
 
@@ -1336,7 +1477,7 @@ ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts
         axis.title = element_text(size = 18, family = "Lato"))
 ```
 
-Comparison:
+Violin plot:
 
 ```{r}
 #| echo: false
@@ -1357,8 +1498,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -1367,16 +1516,19 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### Ubiquitination
 
 ```{r}
 #| echo: false
+#| include: false
 ubi_prot <- human_complete_hl_long %>% filter(unimod_id == 121)
 
 human_ptms_hl_mod_group <- human_ptms_hl_long
@@ -1403,7 +1555,7 @@ ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts
         axis.title = element_text(size = 18, family = "Lato"))
 ```
 
-Comparison
+Violin plot
 
 ```{r}
 #| echo: false
@@ -1424,8 +1576,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -1434,16 +1594,19 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### Methylation
 
 ```{r}
 #| echo: false
+#| include: false
 human_ptms_hl_mod_group <- human_ptms_hl_long
 human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 34, 'Methylated', 'Non-methylated')
 human_ptms_hl_mod_group <- human_ptms_hl_mod_group 
@@ -1486,8 +1649,16 @@ ggplot() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -1496,23 +1667,35 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### oxPTMs
 
 ```{r}
 #| echo: false
-human_ptms_hl_mod_group <- human_complete_hl_long 
+#| include: false
+oxPTMs_prot <- human_complete %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% inner_join(long_lived_proteins_hl, by = join_by(LeadProt))
+
+human_ptms_hl_mod_group <- human_ptms_hl_long
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, oxPTMs_prot)
 
 human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% oxPTMs$unimod_id & human_ptms_hl_mod_group$ptm_res %in% oxPTMs$AAs_list), 'oxPTMs', 'Non-oxPTMs')
 
 human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-oxPTMs", "oxPTMs"))
 
-human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-oxPTMs' & ptm_class == 'Post-translational') | mod_group == 'oxPTMs')
+# all of the proteins that get oxPTMs
+oxPTMs_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get oxPTMs are not included in the non-oxPTMs section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs' | (mod_group == 'Non-oxPTMs' & (!LeadProt %in% oxPTMs_prot$LeadProt)))
+
+extra <- human_ptms_hl_long %>% filter(!unimod_id %in% oxPTMs$unimod_id) %>% mutate(mod_group = 'Non-oxPTMs')
+human_ptms_hl_mod_group_exclusive <- rbind(human_ptms_hl_mod_group_exclusive, extra)
 
 ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_density(alpha = 0.7, bw = 7) + 
@@ -1521,54 +1704,59 @@ ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts
   theme_classic() 
 ```
 
-Comparing
+Violin plot:
 
 ```{r}
 #| echo: false
 #| warning: false
-p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-oxPTMs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_hl_hours, mod_group) %>%
+p1 <- human_ptms_hl_long %>% filter(!unimod_id %in% oxPTMs$unimod_id) %>% mutate(mod_group = 'Non-oxPTMs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_hl_hours, mod_group) %>%
 distinct(Uniprot_entry_name, mean_hl_hours, mod_group, sum) 
 p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'oxPTMs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), mean_hl_hours, mod_group) %>%
 distinct(Uniprot_entry_name, mean_hl_hours, mod_group, sum) 
 
 proteins_exclusive <- rbind(p1, p2)
+proteins_exclusive$mod_group <- factor(proteins_exclusive$mod_group, levels = c("Non-oxPTMs", "oxPTMs"))
 
 ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_hl_hours, weight = sum),  width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_y_continuous(limits = c(0,500)) +
   scale_fill_manual(values = c("white", '#fdb462')) +
   labs(y = 'Half-life (hours)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
 ```
 
 ```{r}
 #| echo: false
-# Create survey design
-design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
-
-# Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
-
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ### Lysine acylations
 
 ```{r}
 #| echo: false
-human_ptms_hl_mod_group <- human_complete_hl_long
+#| include: false
+Kacylation_prot <- human_complete %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') %>% inner_join(long_lived_proteins_hl, by = join_by(LeadProt))
+
+human_ptms_hl_mod_group <- human_ptms_hl_long
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, Kacylation_prot)
 
 human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% lysine_acylation & human_ptms_hl_mod_group$ptm_res == 'K'), 'K acylation', 'Non-acylated')
 
 human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-acylated", "K acylation"))
 
-human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-acylated' & ptm_class == 'Post-translational') | mod_group == 'K acylation')
+# all of the proteins that get K acylated
+Kacylation_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'K acylation') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get K acylated are not included in the non-acylated section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'K acylation' | (mod_group == 'Non-acylated' & (!LeadProt %in% Kacylation_prot$LeadProt)))
 
 ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_density(alpha = 0.7, bw = 7) + 
@@ -1590,14 +1778,23 @@ proteins_exclusive <- rbind(p1, p2)
 ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_hl_hours, weight = sum), width = 0.15,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_y_continuous(limits = c(0,500)) +
   scale_fill_manual(values = c("white", '#fb8072')) +
   labs(y = 'Half-life (hours)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -1606,23 +1803,32 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ### AGEs
 
 ```{r}
 #| echo: false
-human_ptms_hl_mod_group <- human_complete_hl_short 
+#| include: false
+AGEs_prot <- human_complete %>% filter(unimod_id %in% AGE & ptm_res == 'K') %>% inner_join(long_lived_proteins_hl, by = join_by(LeadProt))
+
+human_ptms_hl_mod_group <- human_ptms_hl_long
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, AGEs_prot)
 
 human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% AGE & human_ptms_hl_mod_group$ptm_res == 'K'), 'AGEs', 'Non-AGEs')
 
 human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-AGEs", "AGEs"))
 
-human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter((mod_group == 'Non-AGEs' & ptm_class == 'Post-translational') | mod_group == 'AGEs')
+# all of the proteins that get K acylated
+AGEs_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'AGEs') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get K acylated are not included in the non-acylated section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'AGEs' | (mod_group == 'Non-AGEs' & (!LeadProt %in% AGEs_prot$LeadProt)))
 
 ggplot(human_ptms_hl_mod_group_exclusive, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_density(alpha = 0.7, bw = 1) + 
@@ -1646,14 +1852,23 @@ proteins_exclusive <- rbind(p1, p2)
 ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = mean_hl_hours, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = mean_hl_hours, weight = sum), width = 0.15,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_y_continuous(limits = c(0,500)) +
   scale_fill_manual(values = c("white", '#fccde5')) +
   labs(y = 'Half-life (hours)')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 18, family = "Lato"),  
-        axis.title = element_text(size = 18, family = "Lato"))
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
 ```
 
 ```{r}
@@ -1662,10 +1877,12 @@ ggplot() +
 design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
 
 # Perform the weighted Wilcoxon test using svyranktest
-svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result <- svyranktest(mean_hl_hours~mod_group, design, test = "wilcoxon")
+svyranktest_result
 
-print('P-value cut-off')
-0.05/sqrt((dim(proteins_exclusive)[1])/100)
+print('Adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 ## Binning
@@ -1814,4 +2031,35 @@ ggplot(mean_hours_per_hl_group, aes(x = hl_group, y = mean_ptms_group, fill = mo
         axis.title = element_text(size = 13, family = "Lato"))
 ```
 
-### 
+# Binning by the number of PTMs
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+bins <- human_ptms_hl_long %>% group_by(Uniprot_entry_name) %>% summarise(mean_hl_hours, sum_norm_counts = sum(counts_norm_abund_len)) %>% distinct() %>% arrange(desc(sum_norm_counts))
+bound <- dim(bins)[1]
+bin1 <- bins[1:as.integer(bound/3), ]
+bin2 <- bins[as.integer(bound/3 + 1):as.integer(bound/3*2), ]
+bin3 <- bins[as.integer(bound/3*2+1):bound, ]
+
+bin1$bin <- 'High'
+bin2$bin <- 'Medium'
+bin3$bin <- 'Low'
+
+bins <- rbind(bin1, bin2, bin3)
+bins$bin <- factor(bins$bin, levels = c("Low", "Medium", "High"))
+ggplot(bins, aes(x = mean_hl_hours)) +
+  geom_histogram(fill = '#919191') +
+  labs(x = 'Half-life (hours)', y = 'Protein counts') +
+  facet_wrap(~bin) +
+  theme_bw() +
+  theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(size = 13, family = "Lato"),
+        axis.text = element_text(size = 13, family = "Lato"),  
+        axis.title = element_text(size = 13, family = "Lato"),
+        strip.background.x = element_blank()
+        )
+```

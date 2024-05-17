@@ -21,6 +21,7 @@ library(tidyr)
 library(readxl)
 library(scales)
 library(stringr)
+library(survey)
 ```
 
 ```{r}
@@ -35,7 +36,7 @@ human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
 iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
 
 human_ptms_iupred <- inner_join(human_ptms, iupred_scores, by = join_by('LeadProt' =='UniProt_ID'))
-
+human_complete_iupred <- inner_join(human_complete, iupred_scores, by = join_by('LeadProt' =='UniProt_ID'))
 lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
 AGE <- c(6, 907, 378)
 
@@ -114,6 +115,8 @@ The plot below shows how the weighted abundance of modifications changes with th
 
 # Outliers
 
+Removing proteins with too many modifications.
+
 ```{r}
 #| echo: false
 #| warning: false
@@ -168,6 +171,472 @@ ggplot(data = df, aes(x = Ratio_Above_0.5, y = sum_norm_counts)) +
   labs(x = 'Proportion of amino acids with a score above 0.5', y = 'Log10 of the sum of normalised counts') +
   scale_y_log10(limits = c(0.00001,1)) +
   theme_classic()
+```
+
+Phosphorylation violin plot
+
+## Distributions
+
+### Phoshorylation
+
+```{r}
+#| echo: false
+#| warning: false
+human_ptms_hl_mod_group <- human_ptms_iupred
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 21, 'Phosphorylated', 'Non-phosphorylated')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-phosphorylated", "Phosphorylated"))
+
+# all of the proteins that get phosphorylated
+pho_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Phosphorylated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get phosphorylated are not included in the Non-phosphorylated section
+
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Phosphorylated' | (mod_group == 'Non-phosphorylated' & (!LeadProt %in% pho_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Phosphorylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.5)) +
+  scale_fill_manual(values = c("white", '#b3de69')) +
+  labs(y = 'Melting temperature (°C)')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+Wilcoxon test (note that the sample sizes are uneven). The p value was adjusted uisng the formula p/sqrt(N/100), where N = n1+ n2
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest_result <- svyranktest(Ratio_Above_0.5~mod_group, design, test = "wilcoxon")
+svyranktest_result
+
+print('adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
+```
+
+```{r}
+#| echo: false
+#| eval: false
+# This is to check the proteins present in a particular half-life interval:
+df <- p1 %>% filter(Ratio_Above_0.5 > 48 & Ratio_Above_0.5 < 52) %>% arrange(desc(sum)) 
+
+ggplot(df[1:5,], aes(x = reorder(Uniprot_entry_name, -sum), y = sum)) +
+  geom_col() +
+  labs(x = 'UniProt accession', y = 'Sum of normalised counts') +
+  theme_classic()
+```
+
+### Acetylation
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+human_ptms_hl_mod_group <- human_ptms_iupred 
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 1, 'Acetylated', 'Non-acetylated')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-acetylated", "Acetylated"))
+
+# all of the proteins that get acetylated
+acetyl_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Acetylated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get methylated are not included in the non-meth section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Acetylated' | (mod_group == 'Non-acetylated' & (!LeadProt %in% acetyl_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-acetylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Acetylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#8dd3c7')) +
+  labs(y = 'Melting temperature (°C)')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest_result <- svyranktest(Ratio_Above_0.5~mod_group, design, test = "wilcoxon")
+svyranktest_result
+
+print('adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
+```
+
+### Ubiquitination
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+ubi_prot <- human_complete_iupred %>% filter(unimod_id == 121) 
+
+human_ptms_hl_mod_group <- human_ptms_iupred
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, ubi_prot)
+
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 121, 'Ubiquitinated', 'Non-ubiquitinated')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-ubiquitinated", "Ubiquitinated"))
+
+# all of the proteins that get oxidised
+ubi_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Ubiquitinated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get oxidised are not included in the non-oxi section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Ubiquitinated' | (mod_group == 'Non-ubiquitinated' & (!LeadProt %in% ubi_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-ubiquitinated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Ubiquitinated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#bebada')) +
+  labs(y = 'Melting temperature (°C)')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest_result <- svyranktest(Ratio_Above_0.5~mod_group, design, test = "wilcoxon")
+svyranktest_result
+
+print('adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
+```
+
+### Methylation
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+human_ptms_hl_mod_group <- human_ptms_iupred
+human_ptms_hl_mod_group$mod_group <- if_else(human_ptms_hl_mod_group$unimod_id == 34, 'Methylated', 'Non-methylated')
+human_ptms_hl_mod_group <- human_ptms_hl_mod_group 
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-methylated", "Methylated"))
+
+# all of the proteins that get methylated
+meth_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'Methylated') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get methylated are not included in the non-meth section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'Methylated' | (mod_group == 'Non-methylated' & (!LeadProt %in% meth_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-methylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Methylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#80b1d3')) +
+  labs(y = 'Melting temperature (°C)')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest_result <- svyranktest(Ratio_Above_0.5~mod_group, design, test = "wilcoxon")
+svyranktest_result
+
+print('adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
+```
+
+### oxPTMs
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+  
+oxPTMs_prot <- human_complete_iupred %>% filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list)
+
+human_ptms_hl_mod_group <- human_ptms_iupred
+
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, oxPTMs_prot)
+
+human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% oxPTMs$unimod_id & human_ptms_hl_mod_group$ptm_res %in% oxPTMs$AAs_list), 'oxPTMs', 'Non-oxPTMs')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-oxPTMs", "oxPTMs"))
+
+# all of the proteins that get oxPTMs
+oxPTMs_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get oxPTMs are not included in the non-oxPTMs section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'oxPTMs' | (mod_group == 'Non-oxPTMs' & (!LeadProt %in% oxPTMs_prot$LeadProt)))
+
+
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-oxPTMs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'oxPTMs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#fdb462')) +
+  labs(y = 'Melting temperature (°C)')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest_result <- svyranktest(Ratio_Above_0.5~mod_group, design, test = "wilcoxon")
+svyranktest_result
+
+print('adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
+```
+
+### Lysine acylations
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+Kacylation_prot <- human_complete_iupred %>% filter(unimod_id %in% lysine_acylation & ptm_res == 'K') 
+
+human_ptms_hl_mod_group <- human_ptms_iupred
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, Kacylation_prot)
+
+human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% lysine_acylation & human_ptms_hl_mod_group$ptm_res == 'K'), 'K acylation', 'Non-acylated')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-acylated", "K acylation"))
+
+# all of the proteins that get K acylated
+Kacylation_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'K acylation') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get K acylated are not included in the non-acylated section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'K acylation' | (mod_group == 'Non-acylated' & (!LeadProt %in% Kacylation_prot$LeadProt)))
+
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-acylated') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'K acylation') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+  
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#fb8072')) +
+  labs(y = 'Melting temperature (°C)')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest_result <- svyranktest(Ratio_Above_0.5~mod_group, design, test = "wilcoxon")
+svyranktest_result
+
+print('adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
+```
+
+```{r}
+#| echo: false
+#| eval: false
+# This is to check the proteins present in a particular half-life interval:
+df <- p1 %>% filter(Ratio_Above_0.5 > 55 & Ratio_Above_0.5 < 65) %>% arrange(desc(sum)) 
+
+ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, -sum), y = sum)) +
+  geom_col() +
+  labs(x = 'UniProt accession', y = 'Sum of normalised counts') +
+  theme_classic()
+```
+
+```{r}
+#| eval: false
+#| echo: false
+write.table(df$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/proteins.tsv', row.names = F, sep="\t", quote = F)
+```
+
+### AGEs
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+AGEs_prot <- human_complete_iupred %>% filter(unimod_id %in% AGE & ptm_res == 'K') 
+
+human_ptms_hl_mod_group <- human_ptms_iupred
+human_ptms_hl_mod_group <- rbind(human_ptms_hl_mod_group, AGEs_prot)
+
+human_ptms_hl_mod_group$mod_group <- if_else((human_ptms_hl_mod_group$unimod_id %in% AGE & human_ptms_hl_mod_group$ptm_res == 'K'), 'AGEs', 'Non-AGEs')
+
+human_ptms_hl_mod_group$mod_group <- factor(human_ptms_hl_mod_group$mod_group, levels = c("Non-AGEs", "AGEs"))
+
+# all of the proteins that get K acylated
+AGEs_prot <- human_ptms_hl_mod_group %>% filter(mod_group == 'AGEs') %>% dplyr::select(LeadProt) %>% distinct()
+# those proteins that get K acylated are not included in the non-acylated section
+human_ptms_hl_mod_group_exclusive <- human_ptms_hl_mod_group %>% filter(mod_group == 'AGEs' | (mod_group == 'Non-AGEs' & (!LeadProt %in% AGEs_prot$LeadProt)))
+
+p1 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'Non-AGEs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+p2 <- human_ptms_hl_mod_group_exclusive %>% filter(mod_group == 'AGEs') %>% group_by(Uniprot_entry_name) %>% summarise(sum =sum(counts_norm_abund_len), Ratio_Above_0.5, mod_group) %>%
+distinct(Uniprot_entry_name, Ratio_Above_0.5, mod_group, sum) 
+
+proteins_exclusive <- rbind(p1, p2)
+
+ggplot() +
+  geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
+  geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("white", '#fccde5')) +
+  labs(y = 'Melting temperature (°C)')+
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.position = 'none',
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 20, family = "Lato"),  
+        axis.title = element_text(size = 20, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+print('Non-modified')
+dim(p1)
+print('Modified')
+dim(p2)
+```
+
+```{r}
+#| echo: false
+# Create survey design
+design <- svydesign(ids = ~1, data = proteins_exclusive, weights = ~sum)
+
+# Perform the weighted Wilcoxon test using svyranktest
+svyranktest_result <- svyranktest(Ratio_Above_0.5~mod_group, design, test = "wilcoxon")
+svyranktest_result
+
+print('adjusted p-value')
+svyranktest_result$p.value * sqrt((dim(proteins_exclusive)[1])/100)
+dim(proteins_exclusive)
 ```
 
 # Binning
@@ -386,18 +855,4 @@ ggplot(mean_counts_per_ratio_group, aes(x = ratio_group, y = mean_ptms_group, fi
   theme(legend.position = "none",
         axis.text = element_text(size = 16, family = "Lato"),
         axis.title = element_text(size = 16, family = "Lato")) 
-```
-
-Checking the abundance differences between oxPTMs and phospho:
-
-```{r}
-human_complete %>% 
-  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>%
-  summarise(sum(counts_norm_abund_len))
-```
-
-```{r}
-human_complete %>% 
-  filter(unimod_id == 21) %>%
-  summarise(sum(counts_norm_abund_len))
 ```
