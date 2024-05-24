@@ -65,32 +65,147 @@ there were 3 young donors and 3 elderly donors
 ```{r}
 #| echo: false
 
-human_ptms_cyto_old <- human_complete %>% filter(project_id == 'PXD006570')
-human_ptms_cyto_young <- human_complete %>% filter(project_id == 'PXD006572')
+human_complete_cyto_old <- human_complete %>% filter(project_id == 'PXD006570')
+human_complete_cyto_young <- human_complete %>% filter(project_id == 'PXD006572')
 
-human_ptms_nuc_old <- human_complete %>% filter(project_id == 'PXD006571') 
-human_ptms_nuc_young <- human_complete %>% filter(project_id == 'PXD006576')
+human_complete_nuc_old <- human_complete %>% filter(project_id == 'PXD006571') 
+human_complete_nuc_young <- human_complete %>% filter(project_id == 'PXD006576')
+
+human_ptms_cyto_old <- human_complete %>% filter(project_id == 'PXD006570') %>% filter(ptm_class == 'Post-translational')
+human_ptms_cyto_young <- human_complete %>% filter(project_id == 'PXD006572') %>% filter(ptm_class == 'Post-translational')
+
+human_ptms_nuc_old <- human_complete %>% filter(project_id == 'PXD006571') %>% filter(ptm_class == 'Post-translational')
+human_ptms_nuc_young <- human_complete %>% filter(project_id == 'PXD006576') %>% filter(ptm_class == 'Post-translational')
 ```
 
-# Histones
+# Chaperones
 
-Methylation of histones. Do histones get more methylised as we age? compare the mean of the sum of modifications of histones in young and old cells. Do this for cytoplasmic and nuclear proteins.
+Chaperones are part of the proteostasis network. Looking for more modifications in chaperones in ageing samples. This would indicate that damage of the proteostasis network is a feature of ageing.
 
-Where are the histones from?
+Not significant for both nuc and cyto.
 
 ```{r}
 #| echo: false
-histones <- read.csv(file = '/Users/anastasialinchik/Downloads/idmapping_2024_04_30.tsv', header = T, sep = '\t')
+#| include: false
+all_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/all_chaperones.xlsx', sheet = 'BREHME_TABLE S2A', skip = 8)
 
-histones_mod_old <- human_ptms_nuc_old %>% filter(LeadProt %in% histones$Entry)
-histones_mod_young <- human_ptms_nuc_young %>% filter(LeadProt %in% histones$Entry)
+#repressed_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3D', skip = 19)
+#repressed_chaperones <- separate_wider_delim(repressed_chaperones, col = 'Label [Family]', names = c("gene_name", "family"), delim = " ")
+#repressed_chaperones <- inner_join(repressed_chaperones, all_chaperones, by = join_by('Entrez-ID'))
+
+#induced_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3E', skip = 19)
+#induced_chaperones <- separate_wider_delim(induced_chaperones, col = 'Label [Family]', names = c("gene_name", "family"), delim = " ")
+#induced_chaperones <- inner_join(induced_chaperones, all_chaperones, by = join_by('Entrez-ID'))
+```
+
+General comparison of the number of modifications. Sum cytoplasm and nuclear (complete)
+
+```{r}
+#| echo: false
+df1 <- rbind(human_complete_cyto_young, human_complete_nuc_young)
+df2 <- rbind(human_complete_cyto_old, human_complete_nuc_old)
+
+df1 <- df1 %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- df2 %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_boxplot(outliers = F, alpha = 0.7) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' cytoplasm & nucleus)', 'old' = 'Elderly donors \n(B cells\' cytoplasm & nucleus)')) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) + 
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 14, family = "Lato"),
+        axis.title = element_text(size = 14, family = "Lato"), 
+        legend.position = 'none') 
 ```
 
 ```{r}
 #| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
 
-df2 <- histones_mod_young %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'young')
-df1 <- histones_mod_old %>% filter(unimod_id == 34) %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+Only the PTMs.
+
+```{r}
+#| echo: false
+df1 <- rbind(human_ptms_cyto_young, human_ptms_nuc_young)
+df2 <- rbind(human_ptms_cyto_old,human_ptms_nuc_old)
+
+df1 <- df1 %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- df2 %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_boxplot(outliers = F, alpha = 0.7) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' cytoplasm & nucleus)', 'old' = 'Elderly donors \n(B cells\' cytoplasm & nucleus)')) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) + 
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 14, family = "Lato"),
+        axis.title = element_text(size = 14, family = "Lato"),
+        legend.position = 'none') 
+```
+
+```{r}
+#| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+# Initial modifications
+
+## Phosphorylation - not enough
+
+```{r}
+#| echo: false
+df1 <- human_ptms_cyto_young %>% 
+  filter(unimod_id == 21) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_ptms_cyto_old %>% 
+  filter(unimod_id == 21) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
 
 df <- rbind(df1, df2)
 df$group <- factor(df$group, levels = c('young', 'old'))
@@ -106,24 +221,36 @@ ggplot(df, aes(y = sum, x = group)) +
 
 ```{r}
 #| echo: false
-wilcox.test(df1$sum, df2$sum)
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
 ```
-
-(maybe it would be better to look at all modifications, not just methylation)
-
-What about modifications in histones in general? Not just methylation? Use only the nuclear groups bcs histones are obviously in the nucleus.
 
 ```{r}
 #| echo: false
-df2 <- histones_mod_young %>% filter(ptm_class == 'Post-translational') %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'young')
-df1 <- histones_mod_old %>% filter(ptm_class == 'Post-translational') %>% group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+wilcox.test(df1$sum, df2$sum)
+```
+
+```{r}
+#| echo: false
+df1 <- human_ptms_nuc_young %>% 
+  filter(unimod_id == 21) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_ptms_nuc_old %>% 
+  filter(unimod_id == 21) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
 
 df <- rbind(df1, df2)
 df$group <- factor(df$group, levels = c('young', 'old'))
 ggplot(df, aes(y = sum, x = group)) +
   geom_boxplot(outliers = F) +
-  scale_y_continuous(labels = scales::label_number(scale = 1e4)) +
-  labs(y = 'Sum of normalised counts (scaled by 1e4)') +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
   theme_classic() + 
   theme(axis.title.x = element_blank(),
         axis.text = element_text(size = 16, family = "Lato"),
@@ -132,68 +259,278 @@ ggplot(df, aes(y = sum, x = group)) +
 
 ```{r}
 #| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+```{r}
+#| echo: false
 wilcox.test(df1$sum, df2$sum)
 ```
 
-## Enriched PTMs in histones
-
-Which PTMs are enriched in the histones of old cells compared to new?
-
-```{r}
-#| echo: false
-df1 <- histones_mod_young %>% filter(ptm_class == 'Post-translational') %>% 
-  group_by(ptm_name) %>%
-  summarise(sum =sum(counts_norm_abund_len))
-
-df2 <- histones_mod_old %>% filter(ptm_class == 'Post-translational') %>% 
-  group_by(ptm_name) %>%
-  summarise(sum =sum(counts_norm_abund_len))
-
-df3 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
-  filter(sum_old > sum_young) %>%
-  mutate(change = sum_old/sum_young)
-```
-
-```{r}
-#| echo: false
-ggplot(df3, aes(y = reorder(ptm_name, change), x = change)) +
-  geom_col() +
-  labs(y = 'PTMs', x = 'Fold change') +
-  theme_classic()
-```
-
-# PTMs Chaperones
-
-```{r}
-#| echo: false
-all_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/all_chaperones.xlsx', sheet = 'BREHME_TABLE S2A', skip = 8)
-
-repressed_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3D', skip = 19)
-repressed_chaperones <- separate_wider_delim(repressed_chaperones, col = 'Label [Family]', names = c("gene_name", "family"), delim = " ")
-repressed_chaperones <- inner_join(repressed_chaperones, all_chaperones, by = join_by('Entrez-ID'))
-
-induced_chaperones <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/subnetwork_chaperones.xlsx', sheet = 'BREHME_TABLE S3E', skip = 19)
-induced_chaperones <- separate_wider_delim(induced_chaperones, col = 'Label [Family]', names = c("gene_name", "family"), delim = " ")
-induced_chaperones <- inner_join(induced_chaperones, all_chaperones, by = join_by('Entrez-ID'))
-```
-
-## oxPTMs
-
-Repressed chaperones get more oxPTMs?
-
-Do aged chaperones have more oxPTMs than non-aged?
-
-Not significant for both nuc and cyto
+## Acetylation - not enough
 
 ```{r}
 #| echo: false
 df1 <- human_ptms_cyto_young %>% 
-  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  filter(unimod_id == 1) %>% 
   filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
   group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
   distinct() %>% mutate(group = 'young')
 df2 <- human_ptms_cyto_old %>% 
+  filter(unimod_id == 1) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+```{r}
+#| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
+
+```{r}
+#| echo: false
+df1 <- human_ptms_nuc_young %>% 
+  filter(unimod_id == 1) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_ptms_nuc_old %>% 
+  filter(unimod_id == 1) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+```{r}
+#| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
+
+## Methylation - not enough
+
+```{r}
+#| echo: false
+df1 <- human_ptms_cyto_young %>% 
+  filter(unimod_id == 34) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_ptms_cyto_old %>% 
+  filter(unimod_id == 34) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+```{r}
+#| echo: false
+df1 <- human_ptms_nuc_young %>% 
+  filter(unimod_id == 34) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_ptms_nuc_old %>% 
+  filter(unimod_id == 34) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+## oxPTMs
+
+```{r}
+#| echo: false
+df1 <- human_ptms_nuc_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+df2 <- human_ptms_nuc_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+all_nuc <- inner_join(df1, df2, by = join_by(Uniprot_entry_name))
+
+df3 <- human_ptms_cyto_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+df4 <- human_ptms_cyto_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+all_cyto <- inner_join(df3, df4, by = join_by(Uniprot_entry_name))
+```
+
+```{r}
+#| echo: false
+df1 <- human_complete_cyto_young %>% 
   filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young') 
+df2 <- human_complete_cyto_old %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_boxplot(outliers = F, alpha = 0.7) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' cytoplasm)', 'old' = 'Elderly donors \n(B cells\' cytoplasm)')) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) + 
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato"),
+        legend.position = 'none') 
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+```{r}
+#| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
+
+```{r}
+#| echo: false
+df1 <- human_complete_nuc_young %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_complete_nuc_old %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_boxplot(outliers = F, alpha = 0.7) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' nucleus)', 'old' = 'Elderly donors \n(B cells\' nucleus)')) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) + 
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato"),
+        legend.position = 'none')
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
+```
+
+```{r}
+#| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
+
+## K acylation - NO
+
+NOT FOUND
+
+## AGEs - NO
+
+NOT FOUND
+
+## Ubiquitination - not enough
+
+```{r}
+#| echo: false
+df1 <- human_complete_cyto_young %>% 
+  filter(unimod_id == 121) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- human_complete_cyto_old %>% 
+  filter(unimod_id == 121) %>% 
   filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
   group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
   distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
@@ -212,33 +549,286 @@ ggplot(df, aes(y = sum, x = group)) +
 
 ```{r}
 #| echo: false
-wilcox.test(df1$sum, df2$sum)
+print('young')
+dim(df1)[1]
+print('old')
+dim(df2)[1]
 ```
-
-## AGEs
-
-NOT FOUND
-
-## Oxidation
 
 ```{r}
 #| echo: false
-df1 <- human_ptms_cyto_young %>% 
-  filter(unimod_id == 35) %>% 
+df1 <- human_complete_nuc_young %>% 
+  filter(unimod_id == 121) %>% 
   filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
   group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
   distinct() %>% mutate(group = 'young')
-df2 <- human_ptms_cyto_old %>% 
-  filter(unimod_id == 35) %>% 
+df2 <- human_complete_nuc_old %>% 
+  filter(unimod_id == 121) %>% 
   filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
   group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
   distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
 
 df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
 ggplot(df, aes(y = sum, x = group)) +
   geom_boxplot(outliers = F) +
   scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
-  labs(y = 'Sum of normalised counts (scaled by 1e5)') +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato"))
+```
+
+The previously selected modifications do not work. Are there any modification enrichments here at all?
+
+# Fold change
+
+In which **chaperones** was there an increase or decrease in PTMs? This is using the fold change \>2 or \< 0.5
+
+First the cytoplasm:
+
+```{r}
+#| echo: false
+df1 <- human_ptms_cyto_young %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot)
+
+df2 <- human_ptms_cyto_old %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot)
+
+df3 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
+  arrange(desc(change))
+
+kable(df3, caption = 'Chaperones in which PTMs increased (cytoplasm)') %>% 
+  kable_classic(full_width = F)
+
+df4 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
+  arrange(desc(change))
+
+kable(df4, caption = 'Chaperones in which PTMs decreased (cytoplasm)') %>% 
+  kable_classic(full_width = F)
+```
+
+```{r}
+#| echo: false
+#| eval: false
+write.table(df3$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/up_in_old.tsv', row.names = F, sep="\t", quote = F)
+write.table(df4$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/down_in_old.tsv', row.names = F, sep="\t", quote = F)
+```
+
+Now the nucleus:
+
+```{r}
+#| echo: false
+df1 <- human_ptms_nuc_young %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot)
+
+df2 <- human_ptms_nuc_old %>% filter(ptm_class == 'Post-translational') %>% 
+  group_by(Uniprot_entry_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot)
+
+df3 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
+  arrange(desc(change))
+
+kable(df3, caption = 'Chaperones in which PTMs increased (nucleus)') %>% 
+  kable_classic(full_width = F)
+
+df4 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
+  arrange(desc(change))
+
+kable(df4, caption = 'Chaperones in which PTMs decreased (nucleus)') %>% 
+  kable_classic(full_width = F)
+```
+
+How many and which chaperones were identified in the cytoplasm of young and old?
+
+```{r}
+#| echo: false
+df1 <- human_complete_nuc_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+df2 <- human_complete_nuc_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+all_nuc <- inner_join(df1, df2, by = join_by(Uniprot_entry_name))
+
+df3 <- human_complete_cyto_young %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+df4 <- human_complete_cyto_old %>% filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% distinct(Uniprot_entry_name)
+all_cyto <- inner_join(df3, df4, by = join_by(Uniprot_entry_name))
+
+kable(df1, caption = 'Nuclear (young)') %>% 
+  kable_classic(full_width = F)
+
+kable(df2, caption = 'Nuclear (old)') %>% 
+  kable_classic(full_width = F)
+
+kable(all_nuc, caption = 'In both nuclear samples') %>% 
+  kable_classic(full_width = F)
+
+paste('Nuclear chaperones (young): ', dim(df1)[1])
+paste('Nuclear chaperones (old): ', dim(df2)[1])
+paste('Nuclear chaperones (both): ', dim(all_nuc)[1])
+
+kable(df3, caption = 'Cytoplasmic (young)') %>% 
+  kable_classic(full_width = F)
+
+kable(df1, caption = 'Cytoplasmic (old)') %>% 
+  kable_classic(full_width = F)
+
+kable(all_cyto, caption = 'In both cytoplasmic samples') %>% 
+  kable_classic(full_width = F)
+
+paste('Cytoplasmic chaperones (young): ', dim(df3)[1])
+paste('Cytoplasmic chaperones (old): ', dim(df4)[1])
+paste('Cytoplasmic chaperones (both): ', dim(all_cyto)[1])
+```
+
+For chaperones (nucleus) that are present in both young and old, wich PTMs increase or decrease:
+
+```{r}
+#| echo: false
+df1 <- human_ptms_nuc_young %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df2 <- human_ptms_nuc_old %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df3 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
+  arrange(desc(change))
+
+kable(df3, caption = 'PTMs that increase in chaperones found in the nucleus') %>% 
+  kable_classic(full_width = F)
+
+df4 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
+  arrange(desc(change))
+
+kable(df4, caption = 'PTMs that decrease in chaperones found in the nucleus') %>% 
+  kable_classic(full_width = F)
+```
+
+Now not limited to PTMs (still nucleus)
+
+```{r}
+#| echo: false
+df1 <- human_complete_nuc_young %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df2 <- human_complete_nuc_old %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df3 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
+  arrange(desc(change))
+
+kable(df3, caption = 'All modifications that increase in chaperones found in the nucleus') %>% 
+  kable_classic(full_width = F)
+
+df4 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
+  arrange(desc(change))
+
+kable(df4, caption = 'All modifications that decrease in chaperones found in the nucleus') %>% 
+  kable_classic(full_width = F)
+```
+
+Now the cytoplasm.
+
+```{r}
+#| echo: false
+df1 <- human_ptms_cyto_young %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df2 <- human_ptms_cyto_old %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df3 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
+  arrange(desc(change))
+
+kable(df3, caption = 'PTMs that increase in chaperones found in the cytoplasm') %>% 
+  kable_classic(full_width = F)
+
+df4 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
+  arrange(desc(change))
+
+kable(df4, caption = 'PTMs that decrease in chaperones found in the cytoplasm') %>% 
+  kable_classic(full_width = F)
+```
+
+Now not limited to PTMs
+
+```{r}
+#| echo: false
+df1 <- human_complete_cyto_young %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df2 <- human_complete_cyto_old %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(ptm_name) %>%
+  summarise(sum =sum(counts_norm_abund_len)) %>% arrange(desc(sum))
+
+df3 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
+  arrange(desc(change))
+
+kable(df3, caption = 'All modifications that increase in chaperones found in the cytoplasm') %>% 
+  kable_classic(full_width = F)
+
+df4 <- inner_join(df1, df2, by = join_by(ptm_name),  suffix = c('_young', '_old')) %>% 
+  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
+  arrange(desc(change))
+
+kable(df4, caption = 'All modifications that decrease in chaperones found in the cytoplasm') %>% 
+  kable_classic(full_width = F)
+```
+
+# New modifications
+
+These are the modifications for which the fold change was \> 2 and the sample size was large enough and both young and old samples contained the same chaperones.
+
+## \[35\]
+
+```{r}
+#| echo: false
+df1 <- human_complete_cyto_young %>% 
+  filter(unimod_id == 35) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young') 
+df2 <- human_complete_cyto_old %>% 
+  filter(unimod_id == 35) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
   theme_classic() + 
   theme(axis.title.x = element_blank(),
         axis.text = element_text(size = 16, family = "Lato"),
@@ -250,145 +840,168 @@ ggplot(df, aes(y = sum, x = group)) +
 wilcox.test(df1$sum, df2$sum)
 ```
 
-# Fold change
+```{r}
+#| echo: false
+print("Number of chaperones")
+dim(df)
+```
+
+## \[7\]
 
 ```{r}
 #| echo: false
-df1 <- human_ptms_cyto_young %>% filter(ptm_class == 'Post-translational') %>% 
-  group_by(Uniprot_entry_name) %>%
-  summarise(sum =sum(counts_norm_abund_len))
+df1 <- human_complete_cyto_young %>% 
+  filter(unimod_id == 7) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young') 
+df2 <- human_complete_cyto_old %>% 
+  filter(unimod_id == 7) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
 
-df2 <- human_ptms_cyto_old %>% filter(ptm_class == 'Post-translational') %>% 
-  group_by(Uniprot_entry_name) %>%
-  summarise(sum =sum(counts_norm_abund_len))
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
 
-df3 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
-  filter(sum_old > sum_young) %>%
-  mutate(change = sum_old/sum_young) %>% filter(change >2) %>%
-  arrange(desc(change))
-
-df4 <- inner_join(df1, df2, by = join_by(Uniprot_entry_name),  suffix = c('_young', '_old')) %>% 
-  filter(sum_old < sum_young) %>%
-  mutate(change = sum_old/sum_young) %>% filter(change <0.5) %>%
-  arrange(desc(change))
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
 ```
 
 ```{r}
 #| echo: false
-write.table(df3$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/up_in_old.tsv', row.names = F, sep="\t", quote = F)
-write.table(df4$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/down_in_old.tsv', row.names = F, sep="\t", quote = F)
-```
-
-This list can be used for DAVID to check for significant enrichment of GO terms.I
-
-# Changes in high disorder/long residence times proteins
-
-There were 3 young donors and 3 elederly donors so can plot histograms instead of density plots.
-
-```{r}
-#| echo: false
-#| include: false
-
-mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
-mt <- separate_rows(mt, Protein_ID, sep = ";")
-mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
-
-iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
-
-short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`) %>% rename(LeadProt = `Uniprot ID`, mean_hl_hours = `Half-life`)
-
-long_lived_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_grouped.tsv', sep = '\t', header = T)
-```
-
-MT
-
-```{r}
-#| echo: false
-f <- human_ptms_cyto_young %>% inner_join(mt, by = join_by('LeadProt'))
-b <- human_ptms_cyto_old %>% inner_join(mt, by = join_by('LeadProt'))
+wilcox.test(df1$sum, df2$sum)
 ```
 
 ```{r}
 #| echo: false
-#| warning: false
-ggplot() +
-  geom_histogram(data = f, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bw = 0.6) + 
-  geom_histogram(data = b, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) +
-  labs(x = 'Melting temperature (°C)', y = 'Density') +
-  theme_classic() +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 13, family = "Lato"),
-        legend.position = c(0.28,0.9), 
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
+print("Number of chaperones")
+dim(df)
 ```
 
-check half-lives and iupred
+## \[1263\]
 
 ```{r}
 #| echo: false
-f <- human_ptms_cyto_young %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
-b <- human_ptms_cyto_old %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
-```
+df1 <- human_complete_cyto_young %>% 
+  filter(unimod_id == 1263) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young') 
+df2 <- human_complete_cyto_old %>% 
+  filter(unimod_id == 1263) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
 
-```{r}
-#| echo: false
-#| warning: false
-ggplot() +
-  geom_histogram(data = f, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bw = 0.6) + 
-  geom_histogram(data = b, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) +
-  labs(x = 'Proportion of amino acids with a score above 0.5', y = 'Density') +
-  theme_classic() +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 13, family = "Lato"),
-        legend.position = c(0.28,0.9), 
-        axis.text = element_text(size = 13, family = "Lato"),  
-        axis.title = element_text(size = 13, family = "Lato"))
-```
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
 
-Short Half-lives
-
-```{r}
-#| echo: false
-f <- human_ptms_cyto_young %>% inner_join(short_lived_proteins_hl, by = join_by('LeadProt'))
-b <- human_ptms_cyto_old %>% inner_join(short_lived_proteins_hl, by = join_by('LeadProt'))
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
 ```
 
 ```{r}
 #| echo: false
-#| warning: false
-ggplot() +
-  geom_histogram(data = f, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'young')) +
-  geom_histogram(data = b, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) +
-  scale_x_continuous(limits = c(7,35)) +
-  labs(x = 'Mean half-lives (hours)', y = 'Density') +
-  theme_classic() +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 16, family = "Lato"),
-        legend.position = c(0.8,0.9), 
-        axis.text = element_text(size = 16, family = "Lato"),  
-        axis.title = element_text(size = 16, family = "Lato"))
-```
-
-long half-lives
-
-```{r}
-#| echo: false
-f <- human_ptms_cyto_young %>% inner_join(long_lived_proteins_hl, by = join_by('LeadProt'))
-b <- human_ptms_cyto_old %>% inner_join(long_lived_proteins_hl, by = join_by('LeadProt'))
+wilcox.test(df1$sum, df2$sum)
 ```
 
 ```{r}
 #| echo: false
-#| warning: false
-ggplot() +
-  geom_histogram(data = f, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.3, bw = 0.6) +
-  geom_histogram(data = b, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bw = 0.6) + 
-  labs(x = 'Mean half-lives (hours)', y = 'Density') +
-  theme_classic() +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 16, family = "Lato"),
-        legend.position = c(0.8,0.9), 
-        axis.text = element_text(size = 16, family = "Lato"),  
-        axis.title = element_text(size = 16, family = "Lato"))
+print("Number of chaperones")
+dim(df)
+```
+
+## \[4\]
+
+```{r}
+#| echo: false
+df1 <- human_complete_cyto_young %>% 
+  filter(unimod_id == 4) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young') 
+df2 <- human_complete_cyto_old %>% 
+  filter(unimod_id == 4) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+```{r}
+#| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
+
+```{r}
+#| echo: false
+print("Number of chaperones")
+dim(df)
+```
+
+## \[28\]
+
+```{r}
+#| echo: false
+df1 <- human_complete_cyto_young %>% 
+  filter(unimod_id == 28) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young') 
+df2 <- human_complete_cyto_old %>% 
+  filter(unimod_id == 28) %>% 
+  filter(Uniprot_entry_name %in% all_chaperones$Uniprot) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+df1 <- df1 %>% filter(Uniprot_entry_name %in% df2$Uniprot_entry_name)
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+ggplot(df, aes(y = sum, x = group)) +
+  geom_boxplot(outliers = F) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e5)) +
+  labs(y = 'Sum of normalised counts (scaled by 1e5)')+
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 16, family = "Lato"),
+        axis.title = element_text(size = 16, family = "Lato")) 
+```
+
+```{r}
+#| echo: false
+wilcox.test(df1$sum, df2$sum)
+```
+
+```{r}
+#| echo: false
+print("Number of chaperones")
+dim(df)
 ```

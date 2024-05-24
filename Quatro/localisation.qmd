@@ -38,6 +38,23 @@ human_ptms_loc$loc <- gsub("\\[.*?\\]", "", human_ptms_loc$loc)
 ```
 
 ```{r}
+#| eval: false
+#| echo: false
+df <- human_ptms_loc %>% group_by(loc) %>% summarise(prop = sum(counts_norm_abund_len/sum(human_ptms_loc$counts_norm_abund_len)))%>%
+  arrange(desc(prop))
+
+ggplot(df[1:10,], aes(x = reorder(loc,abundance_loc), y = abundance_loc)) +
+  geom_col(fill = '#919191') +
+  labs(y = 'Proportion of PSM counts', x = 'Localisation') +
+  coord_flip() +
+  theme_classic(base_size = 13) +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 11, family = "Lato"),
+        axis.text = element_text(size = 11, family = "Lato"),  
+        axis.title = element_text(size = 11, family = "Lato"))
+```
+
+```{r}
 #| echo: false
 
 df <- human_ptms_loc %>% group_by(loc) %>% summarise(abundance_loc = sum(total_counts/256391635))%>%

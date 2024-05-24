@@ -204,13 +204,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.5)) +
   scale_fill_manual(values = c("white", '#b3de69')) +
-  labs(y = 'Melting temperature (°C)')+
+  labs(y = 'Proportion of amino acids with a score above 0.5')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
         axis.text = element_text(size = 20, family = "Lato"),  
-        axis.title = element_text(size = 20, family = "Lato"))
+        axis.title.y = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}
@@ -276,13 +276,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#8dd3c7')) +
-  labs(y = 'Melting temperature (°C)')+
+  labs(y = 'Proportion of amino acids with a score above 0.5')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
         axis.text = element_text(size = 20, family = "Lato"),  
-        axis.title = element_text(size = 20, family = "Lato"))
+        axis.title.y = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}
@@ -338,13 +338,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#bebada')) +
-  labs(y = 'Melting temperature (°C)')+
+  labs(y = 'Proportion of amino acids with a score above 0.5')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
         axis.text = element_text(size = 20, family = "Lato"),  
-        axis.title = element_text(size = 20, family = "Lato"))
+        axis.title.y = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}
@@ -397,13 +397,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#80b1d3')) +
-  labs(y = 'Melting temperature (°C)')+
+  labs(y = 'Proportion of amino acids with a score above 0.5')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
         axis.text = element_text(size = 20, family = "Lato"),  
-        axis.title = element_text(size = 20, family = "Lato"))
+        axis.title.y = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}
@@ -464,13 +464,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#fdb462')) +
-  labs(y = 'Melting temperature (°C)')+
+  labs(y = 'Proportion of amino acids with a score above 0.5')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
         axis.text = element_text(size = 20, family = "Lato"),  
-        axis.title = element_text(size = 20, family = "Lato"))
+        axis.title.y = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}
@@ -528,13 +528,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#fb8072')) +
-  labs(y = 'Melting temperature (°C)')+
+  labs(y = 'Proportion of amino acids with a score above 0.5')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
         axis.text = element_text(size = 20, family = "Lato"),  
-        axis.title = element_text(size = 20, family = "Lato"))
+        axis.title.y = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}
@@ -608,13 +608,13 @@ ggplot() +
   geom_violin(data = human_ptms_hl_mod_group_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = mod_group)) +
   geom_boxplot(data = proteins_exclusive, aes(x = mod_group, y = Ratio_Above_0.5, weight = sum), width = 0.1,  alpha = 0.5, position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = c("white", '#fccde5')) +
-  labs(y = 'Melting temperature (°C)')+
+  labs(y = 'Proportion of amino acids with a score above 0.5')+
   theme_classic() +
   theme(legend.title = element_blank(),
         legend.position = 'none',
         axis.title.x = element_blank(),
         axis.text = element_text(size = 20, family = "Lato"),  
-        axis.title = element_text(size = 20, family = "Lato"))
+        axis.title.y = element_text(size = 13, family = "Lato"))
 ```
 
 ```{r}

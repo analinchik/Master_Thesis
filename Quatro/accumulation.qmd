@@ -1,0 +1,465 @@
+---
+title: "Accumulation"
+format: 
+  html:
+    embed-resources: true
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-expand: 3
+    toc-title: Contents
+    smooth-scroll: true
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| include: false
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(kableExtra)
+library(ggpubr)
+library(stringr)
+library(Ecume)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+# hl
+Bcells_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/Bcells_hl.tsv', header = T, sep = '\t')
+
+#THIS LOADS THE NEW DATASET
+human_complete <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/human_new.tsv", header = T, sep = '\t')
+
+leadprot_uniprot <- human_complete %>% dplyr::select(Uniprot_entry_name, LeadProt) %>% distinct()
+
+human_ptms <- human_complete %>% filter(ptm_class == 'Post-translational')
+
+# MODIFICATIONS
+oxPTMs <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/table_oxPTMs.xlsx', sheet = 'oxPTMs')
+oxPTMs <- oxPTMs %>%
+  mutate(AAs_list = str_split(Specificity, ", ")) %>% dplyr::select(`Unimod #`, AAs_list) %>% rename(unimod_id = `Unimod #`)
+
+lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
+AGE <- c(6, 907, 378)
+
+mt <- read_xlsx(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/MeltingTemperatures.xlsx', sheet = 5,  col_names = T)
+mt <- separate_rows(mt, Protein_ID, sep = ";")
+mt <- mt %>% dplyr::select(Protein_ID, `Tm Protein`) %>% group_by(Protein_ID) %>% summarise(mean_mt = mean(`Tm Protein`)) %>% rename('LeadProt' = 'Protein_ID')
+
+iupred_scores <- read.csv(file = "/Users/anastasialinchik/Desktop/Thesis/DATA/generated/iupred_scores_with_ratio.tsv", header = T, sep = '\t')
+```
+
+```{r}
+#| echo: false
+
+human_complete_cyto_old <- human_complete %>% filter(project_id == 'PXD006570')
+human_complete_cyto_young <- human_complete %>% filter(project_id == 'PXD006572')
+
+human_complete_nuc_old <- human_complete %>% filter(project_id == 'PXD006571') 
+human_complete_nuc_young <- human_complete %>% filter(project_id == 'PXD006576')
+
+human_ptms_cyto_old <- human_complete %>% filter(project_id == 'PXD006570') %>% filter(ptm_class == 'Post-translational')
+human_ptms_cyto_young <- human_complete %>% filter(project_id == 'PXD006572') %>% filter(ptm_class == 'Post-translational')
+
+human_ptms_nuc_old <- human_complete %>% filter(project_id == 'PXD006571') %>% filter(ptm_class == 'Post-translational')
+human_ptms_nuc_young <- human_complete %>% filter(project_id == 'PXD006576') %>% filter(ptm_class == 'Post-translational')
+```
+
+Changes in high disorder/long residence times proteins
+
+# Proof of accumulation
+
+Mean of total modifications in young vs old samples - skip
+
+```{r}
+#| echo: false
+#| warning: false
+#| eval: false
+df1 <- rbind(human_complete_cyto_young, human_complete_nuc_young)
+df2 <- rbind(human_complete_cyto_old,human_complete_nuc_old)
+
+df1 <- df1 %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- df2 %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') 
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_violin(trim = TRUE, alpha = 0.7) +  # Setting alpha for violin plot
+  geom_boxplot(outlier.shape = NA, width = 0.1, alpha = 0.6, position = position_dodge(width = 0.9), fill = "white", color = "black") +  # Setting alpha for boxplot
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' cytoplasm & nucleus)', 'old' = 'Elderly donors \n(B cells\' cytoplasm & nucleus)')) + 
+  scale_y_continuous(limits = c(0, 0.002), labels = scales::label_number(scale = 1e4)) +
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) + 
+  labs(y = 'Sum of normalised counts (scaled by 1e4)') +
+  theme_classic() + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.text = element_text(size = 14, family = "Lato"),
+    axis.title = element_text(size = 14, family = "Lato"), 
+    legend.position = 'none'
+  )
+```
+
+```{r}
+#| echo: false
+#| eval: false
+result <- wilcox.test(df1$sum, df2$sum)
+result
+print("Adjusted p value")
+result$p.value * sqrt((dim(df)[1])/100)
+```
+
+```{r}
+#| echo: false
+#| eval: false
+
+print("Actual values")
+mean(df1$sum)
+mean(df2$sum)
+```
+
+Only PTMs
+
+```{r}
+#| echo: false
+#| warning: false
+df1 <- rbind(human_ptms_cyto_young, human_ptms_nuc_young)
+df2 <- rbind(human_ptms_cyto_old,human_ptms_nuc_old)
+
+df1 <- df1 %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- df2 %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') 
+
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_violin(trim = TRUE, alpha = 0.7) +  # Setting alpha for violin plot
+  geom_boxplot(outlier.shape = NA, width = 0.15, alpha = 0.6, position = position_dodge(width = 0.9), fill = "white", color = "black") +  # Setting alpha for boxplot
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' cytoplasm & nucleus)', 'old' = 'Elderly donors \n(B cells\' cytoplasm & nucleus)')) + 
+  scale_y_continuous(limits = c(0, 0.0004), labels = scales::label_number(scale = 1e4)) +
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) + 
+  labs(y = 'Sum of normalised counts (scaled by 1e4)') +
+  theme_classic() + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.text = element_text(size = 14, family = "Lato"),
+    axis.title = element_text(size = 14, family = "Lato"), 
+    legend.position = 'none'
+  )
+```
+
+```{r}
+#| echo: false
+result <- wilcox.test(df1$sum, df2$sum)
+result
+print("Adjusted p value")
+result$p.value * sqrt((dim(df)[1])/100)
+```
+
+```{r}
+#| echo: false
+
+print("Actual values")
+mean(df1$sum)
+mean(df2$sum)
+```
+
+```{r}
+#| echo: false
+print('young')
+dim(df1)
+print('old')
+dim(df2)
+```
+
+# oxPTMs
+
+Looking at oxPTMs modifications (bcs they were previously found to be significant for chaperones):
+
+```{r}
+#| echo: false
+#| warning: false
+
+df1 <- rbind(human_complete_cyto_young)
+df2 <- rbind(human_complete_cyto_old)
+
+df1 <- df1 %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young') 
+df2 <- df2 %>% 
+  filter(unimod_id %in% oxPTMs$unimod_id & ptm_res %in% oxPTMs$AAs_list) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') %>% filter(Uniprot_entry_name %in% df1$Uniprot_entry_name)
+
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_violin(trim = TRUE, alpha = 0.7) +  # Setting alpha for violin plot
+  geom_boxplot(outlier.shape = NA, width = 0.15, alpha = 0.6, position = position_dodge(width = 0.9), fill = "white", color = "black") +  # Setting alpha for boxplot
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' cytoplasm)', 'old' = 'Elderly donors \n(B cells\' cytoplasm)')) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) +
+  labs(y = 'Sum of normalised counts (scaled by 1e4)')+
+  scale_y_continuous(limits = c(0, 0.0002), labels = scales::label_number(scale = 1e4)) +
+  theme_classic() + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.text = element_text(size = 14, family = "Lato"),
+    axis.title = element_text(size = 14, family = "Lato"), 
+    legend.position = 'none'
+  )
+```
+
+```{r}
+#| echo: false
+result <- wilcox.test(df1$sum, df2$sum)
+result
+result$p.value * sqrt((dim(df)[1])/100)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+
+df1 <- rbind(human_complete_nuc_young)
+df2 <- rbind(human_complete_nuc_old)
+
+df1 <- df1 %>% 
+  filter(unimod_id == 1) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'young')
+df2 <- df2 %>% 
+  filter(unimod_id == 1) %>% 
+  group_by(Uniprot_entry_name) %>% summarise(sum = sum(counts_norm_abund_len)) %>% 
+  distinct() %>% mutate(group = 'old') 
+
+df <- rbind(df1, df2)
+df$group <- factor(df$group, levels = c('young', 'old'))
+
+ggplot(df, aes(y = sum, x = group, fill = group)) +
+  geom_violin(trim = TRUE, alpha = 0.7) +  # Setting alpha for violin plot
+  geom_boxplot(outlier.shape = NA, width = 0.15, alpha = 0.6, position = position_dodge(width = 0.9), fill = "white", color = "black") +  # Setting alpha for boxplot
+  scale_x_discrete(labels = c('young' = 'Young donors \n(B cells\' nucleus)', 'old' = 'Elderly donors \n(B cells\' nucleus)')) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d')) +
+  labs(y = 'Sum of normalised counts (scaled by 1e4)')+
+  scale_y_continuous(limits = c(0, 0.0005), labels = scales::label_number(scale = 1e4)) +
+  theme_classic() + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.text = element_text(size = 14, family = "Lato"),
+    axis.title = element_text(size = 14, family = "Lato"), 
+    legend.position = 'none'
+  ) 
+```
+
+```{r}
+#| echo: false
+result <- wilcox.test(df1$sum, df2$sum)
+result
+result$p.value * sqrt((dim(df)[1])/100)
+```
+
+There were 3 young donors and 3 elderly donors so can plot histograms instead of density plots.
+
+# Half-lives
+
+```{r}
+#| echo: false
+f <- human_ptms_cyto_young %>% inner_join(Bcells_hl, by = join_by('LeadProt'))
+b <- human_ptms_cyto_old %>% inner_join(Bcells_hl, by = join_by('LeadProt'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+ggplot() +
+  geom_histogram(data = b, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bins = 50) +
+  geom_histogram(data = f, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bins = 50) +
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d'), labels = c('young' = 'Young donors \n(B cells\' cytoplasm)', 'old' = 'Elderly donors \n(B cells\' cytoplasm)')) +  
+  scale_x_continuous(limits = c(0,200)) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 16, family = "Lato"),
+        legend.position = c(0.8,0.9), 
+        axis.text = element_text(size = 16, family = "Lato"),  
+        axis.title = element_text(size = 16, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+#| eval: false
+ks_test(x = b$mean_hl_hours, y = f$mean_hl_hours, w_x = b$counts_norm_abund_len, w_y = f$counts_norm_abund_len)
+```
+
+```{r}
+#| echo: false
+f <- human_ptms_nuc_young %>% inner_join(Bcells_hl, by = join_by('LeadProt'))
+b <- human_ptms_nuc_old %>% inner_join(Bcells_hl, by = join_by('LeadProt'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+ggplot() +
+  geom_histogram(data = b, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bins = 50) +
+  geom_histogram(data = f, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bins = 50) +
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d'), labels = c('young' = 'Young donors \n(B cells\' nucleus)', 'old' = 'Elderly donors \n(B cells\' nucleus)')) + 
+  scale_x_continuous(limits = c(0, 200)) +
+  labs(x = 'Mean half-lives (hours)', y = 'Density') +
+  theme_classic() +
+  theme(
+    legend.title = element_blank(),
+    legend.text = element_text(size = 16, family = "Lato"),
+    legend.position = c(0.8, 0.9), 
+    axis.text = element_text(size = 16, family = "Lato"),  
+    axis.title = element_text(size = 16, family = "Lato")
+  )
+```
+
+```{r}
+#| echo: false
+#| eval: false
+ks_test(x = b$mean_hl_hours, y = f$mean_hl_hours, w_x = b$counts_norm_abund_len, w_y = f$counts_norm_abund_len)
+```
+
+# MT
+
+```{r}
+#| echo: false
+f <- human_ptms_cyto_young %>% inner_join(mt, by = join_by('LeadProt'))
+b <- human_ptms_cyto_old %>% inner_join(mt, by = join_by('LeadProt'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot() +
+  geom_histogram(data = b, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bins = 50) +
+  geom_histogram(data = f, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bins = 50) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d'), labels = c('young' = 'Young donors \n(B cells\' cytoplasm)', 'old' = 'Elderly donors \n(B cells\' cytoplasm)')) +  
+  labs(x = 'Melting temperature (°C)', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15, family = "Lato"),
+        legend.position = c(0.22,0.9), 
+        axis.text = element_text(size = 15, family = "Lato"),  
+        axis.title = element_text(size = 15, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+#| eval: false
+ks_test(x = b$mean_hl_hours, y = f$mean_hl_hours, w_x = b$counts_norm_abund_len, w_y = f$counts_norm_abund_len)
+```
+
+You do not see the same pattern in nuclear proteins
+
+```{r}
+#| echo: false
+f <- human_ptms_nuc_young %>% inner_join(mt, by = join_by('LeadProt'))
+b <- human_ptms_nuc_old %>% inner_join(mt, by = join_by('LeadProt'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false 
+ggplot() +
+  geom_histogram(data = b, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bins = 50) +
+  geom_histogram(data = f, aes(x = mean_mt, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bins = 50) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d'), labels = c('young' = 'Young donors \n(B cells\' nucleus)', 'old' = 'Elderly donors \n(B cells\' nucleus)')) +  
+  labs(x = 'Melting temperature (°C)', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15, family = "Lato"),
+        legend.position = c(0.2,0.9), 
+        axis.text = element_text(size = 15, family = "Lato"),  
+        axis.title = element_text(size = 15, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+#| eval: false
+ks_test(x = b$mean_hl_hours, y = f$mean_hl_hours, w_x = b$counts_norm_abund_len, w_y = f$counts_norm_abund_len)
+```
+
+# IUPred
+
+```{r}
+#| echo: false
+f <- human_ptms_cyto_young %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+b <- human_ptms_cyto_old %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot() +
+  geom_histogram(data = b, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bins = 50) +
+  geom_histogram(data = f, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bins = 50) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d'), labels = c('young' = 'Young donors \n(B cells\' cytoplasm)', 'old' = 'Elderly donors \n(B cells\' cytoplasm)')) +  
+  labs(x = 'Proportion of amino acids with a score above 0.5', y = 'Density') +
+  theme_classic() +
+  theme(
+    legend.title = element_blank(),
+    legend.text = element_text(size = 15, family = "Lato"),
+    legend.position = c(0.8, 0.9), 
+    axis.text = element_text(size = 15, family = "Lato"),  
+    axis.title = element_text(size = 15, family = "Lato")
+  )
+```
+
+```{r}
+#| echo: false
+#| eval: false
+ks_test(x = b$mean_hl_hours, y = f$mean_hl_hours, w_x = b$counts_norm_abund_len, w_y = f$counts_norm_abund_len)
+```
+
+nuclear
+
+```{r}
+#| echo: false
+f <- human_ptms_nuc_young %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+b <- human_ptms_nuc_old %>% inner_join(iupred_scores, by = join_by('LeadProt' == 'UniProt_ID'))
+```
+
+```{r}
+#| echo: false
+#| warning: false
+ggplot() +
+    geom_histogram(data = b, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'old'), alpha = 0.7, bins = 50) +
+  geom_histogram(data = f, aes(x = Ratio_Above_0.5, weight = counts_norm_abund_len, fill = 'young'), alpha = 0.7, bins = 50) + 
+  scale_fill_manual(values = c('young' = '#1a9850', 'old' = '#c51b7d'), labels = c('young' = 'Young donors \n(B cells\' nucleus)', 'old' = 'Elderly donors \n(B cells\' nucleus)')) +  
+  labs(x = 'Proportion of amino acids with a score above 0.5', y = 'Density') +
+  theme_classic() +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15, family = "Lato"),
+        legend.position = c(0.8,0.9), 
+        axis.text = element_text(size = 15, family = "Lato"),  
+        axis.title = element_text(size = 15, family = "Lato"))
+```
+
+```{r}
+#| echo: false
+#| eval: false
+ks_test(x = b$mean_hl_hours, y = f$mean_hl_hours, w_x = b$counts_norm_abund_len, w_y = f$counts_norm_abund_len)
+```

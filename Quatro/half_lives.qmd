@@ -47,6 +47,47 @@ oxPTMs <- oxPTMs %>%
 
 lysine_acylation <- c(122, 1, 58, 1289, 747, 64)
 AGE <- c(6, 907, 378)
+
+```
+
+```{r}
+s <- human_complete %>% 
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_counts = sum(total_counts), abundance) %>%
+  distinct() 
+
+ggplot(s, aes(x = abundance, y = sum_counts)) +
+  geom_col() +
+  scale_x_continuous(limits = c(0,1)) +
+  scale_y_continuous(limits = c(0,7000))
+
+cor(s$sum_counts, s$abundance)
+```
+
+```{r}
+s <- human_complete %>% 
+  group_by(Uniprot_entry_name) %>% 
+  summarise(sum_counts = sum(total_counts), Length) %>%
+  distinct() 
+ggplot(aes(x = Length, y = sum_counts)) +
+  geom_col() +
+  scale_x_continuous(limits = c(0,100))
+
+cor(s$sum_counts, s$Length)
+```
+
+```{r}
+s <- human_complete %>% 
+  group_by(project_id) %>% 
+  summarise(sum_counts = sum(total_counts), raw_files_counts) %>%
+  distinct() 
+
+ggplot(aes(x = raw_files_counts, y = sum_counts)) +
+  geom_col() +
+  scale_x_continuous(limits = c(0,100))
+
+
+cor(s$sum_counts, s$raw_files_counts)
 ```
 
 -   It is assumed that each protein only has one modification. The proteins with no modifications are not identified.
@@ -60,7 +101,7 @@ AGE <- c(6, 907, 378)
 #| include: false
 short_lived_proteins_hl <- read_excel(path = '/Users/anastasialinchik/Desktop/Thesis/DATA/short_lived_proteins_hl.xlsx', sheet = 'HEK293T') %>% dplyr::select(`Uniprot ID`, `Half-life`) %>% rename(LeadProt = `Uniprot ID`, mean_hl_hours = `Half-life`)
 
-long_lived_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_grouped.tsv', sep = '\t', header = T)
+long_lived_proteins_hl <- read.csv(file = '/Users/anastasialinchik/Desktop/Thesis/DATA/generated/long_proteins_hl_grouped.tsv', sep = '\t', header = T) %>% filter(mean_hl_hours > 40)
 
 human_ptms_hl_short <- inner_join(human_ptms, short_lived_proteins_hl, by = join_by(LeadProt))
 
@@ -199,7 +240,7 @@ ggplot(df[1:50,], aes(x = reorder(Uniprot_entry_name, -sum_norm_counts), y = sum
 ```
 
 ```{r}
-write.table(df$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/proteins.tsv', row.names = F, sep="\t", quote = F)
+#write.table(df$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/proteins.tsv', row.names = F, sep="\t", quote = F)
 ```
 
 ```{r}
@@ -1297,8 +1338,6 @@ ggplot(human_complete_hl_long, aes(mean_hl_hours)) +
 ggplot() +
   geom_density(data = long_lived_proteins_hl, aes(x = mean_hl_hours, fill = 'Data found by Mathieson et al.'), alpha = 0.7, bw = 5) +
   geom_density(data = human_ptms_hl_long, aes(x = mean_hl_hours, weight = counts_norm_abund_len, fill = 'Re-processed dataset'), alpha = 0.7, bw = 5) + 
-  geom_vline(xintercept = 30) +
-  geom_vline(xintercept = 100) +
   scale_x_continuous(limits = c(0,max(human_ptms_hl_long$mean_hl_hours))) +
   labs(x = 'Mean half-lives (hours)', y = 'Density') +
   theme_classic() +
@@ -1339,7 +1378,7 @@ ggplot(df[1:10,], aes(x = reorder(Uniprot_entry_name, -sum_norm_counts), y = sum
 ```
 
 ```{r}
-write.table(df$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/proteins.tsv', row.names = F, sep="\t", quote = F)
+#write.table(df$Uniprot_entry_name, file = '/Users/anastasialinchik/Downloads/proteins.tsv', row.names = F, sep="\t", quote = F)
 ```
 
 ```{r}
