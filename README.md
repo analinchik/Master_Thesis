@@ -13,7 +13,9 @@ This is where all of the descriptive statistics are.
 
 `description.qmd` 
 
-`localisation.qmd`
+K-means clustering:
+
+`kmeans.qmd`
 
 This is where all of the stability scores are. 
 
@@ -27,9 +29,9 @@ Subsets of proteins:
 
 `Bcells.qmd`
 
-K-means clustering:
+Accumulation:
 
-`kmeans.qmd`
+`accumulation.qmd`
 
 
 # Extra Data files
