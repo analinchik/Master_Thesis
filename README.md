@@ -101,5 +101,3 @@ The list of oxPTMs was obtained from the study conducted by Devrees, detailed in
 
 Some additional files are generated in `pre_processing.qmd` in order to decrease the time it takes to process and load datafiles. 
 
-## Analysis
-
